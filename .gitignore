@@ -1,0 +1,16 @@
+# Build artifacts
+/bin/
+*.exe
+*.test
+*.out
+coverage.*
+
+# Go workspace
+/vendor/
+go.work
+go.work.sum
+
+# Local agent / editor / OS state
+.claude/
+.DS_Store
+*.swp
