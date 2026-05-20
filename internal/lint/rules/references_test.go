@@ -63,6 +63,15 @@ func TestReferencesBroken(t *testing.T) {
 			nil, 1, "scripts/missing.sh"},
 		{"non-path code span ignored", "Pass the `--help` flag.\n", nil, 0, ""},
 		{"known extension flagged", "Open `notes.md` for context.\n", nil, 1, ""},
+		// Slash-command names look path-like (have a `/`) but are not file
+		// references — they should be skipped.
+		{"slash command ignored", "Run `/my-skill` to start.\n", nil, 0, ""},
+		{"slash command with namespace ignored",
+			"Run `/ckm:brand` to start.\n", nil, 0, ""},
+		// Template placeholders can never resolve statically; skip them so
+		// they do not produce noise on third-party skills.
+		{"template placeholder ignored",
+			"See `references/{subcommand}.md`.\n", nil, 0, ""},
 	}
 
 	for _, tc := range cases {

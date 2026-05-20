@@ -51,6 +51,16 @@ func TestFrontmatterNameFormat(t *testing.T) {
 		{strings.Repeat("a", 65), true},
 		{strings.Repeat("a", 64), false},
 		{"", false}, // covered by name-missing
+		// Namespace prefix form used by Claude slash commands.
+		{"ckm:banner-design", false},
+		{"ckm:brand", false},
+		{"a:b", false},
+		{":banner", true},      // empty namespace
+		{"ckm:", true},         // empty name
+		{"ckm::banner", true},  // empty middle
+		{"ckm:Banner", true},   // upper after colon
+		{"CKM:banner", true},   // upper before colon
+		{"ckm:banner_a", true}, // underscore in name
 	}
 	for _, tc := range cases {
 		got := FrontmatterNameFormat{}.Check(&skill.Skill{Dir: "/x", Name: tc.name})

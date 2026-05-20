@@ -17,9 +17,12 @@ const maxDescriptionLen = 1024
 // for realistic kebab-case identifiers, small enough for every filesystem.
 const maxNameLen = 64
 
-// kebabCaseRE matches strict lowercase kebab-case: ASCII letters and digits
-// separated by single hyphens, no leading/trailing or repeated hyphens.
-var kebabCaseRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+// kebabCaseRE matches lowercase kebab-case names with an optional namespace
+// prefix separated by a colon (e.g. `ckm:banner-design`). Each segment is
+// ASCII letters and digits separated by single hyphens, no leading/trailing
+// or repeated hyphens. The namespace form is widely used by Claude slash
+// commands.
+var kebabCaseRE = regexp.MustCompile(`^([a-z0-9]+(-[a-z0-9]+)*:)?[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // FrontmatterNameMissing flags a skill whose `name` field is absent or empty.
 type FrontmatterNameMissing struct{}

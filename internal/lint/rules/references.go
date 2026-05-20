@@ -119,9 +119,22 @@ func refExists(dir, rel string) bool {
 
 // looksLikePath reports whether s reads as a relative file path: either it
 // contains a directory separator or ends in a known file extension.
+//
+// Two patterns are excluded as well-known false positives:
+//   - strings starting with `/` are slash-command names (e.g. `/my-skill`)
+//     rather than file paths;
+//   - strings containing `{` or `}` are template placeholders
+//     (e.g. `references/{subcommand}.md`) that can never be statically
+//     resolved.
 func looksLikePath(s string) bool {
 	s = strings.TrimSpace(s)
 	if s == "" || strings.ContainsAny(s, " \t\n") {
+		return false
+	}
+	if strings.HasPrefix(s, "/") {
+		return false
+	}
+	if strings.ContainsAny(s, "{}") {
 		return false
 	}
 	if strings.Contains(s, "/") {
