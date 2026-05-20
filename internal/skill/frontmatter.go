@@ -39,14 +39,18 @@ type frontmatterFields struct {
 	AllowedTools []string `yaml:"allowed-tools"`
 }
 
-// splitFrontmatter separates SKILL.md content into the raw frontmatter bytes
+// SplitFrontmatter separates SKILL.md content into the raw frontmatter bytes
 // (without the surrounding fences) and the markdown body. A single blank line
 // immediately after the closing fence is consumed so the body is not led by a
 // stray newline.
-func splitFrontmatter(content []byte) (front []byte, body string, err error) {
+//
+// bodyLine is the 1-indexed file line where the body begins, or 0 if the
+// body is empty. Callers that need to map in-body offsets back to file
+// lines (the linter, for example) use it as the line offset.
+func SplitFrontmatter(content []byte) (front []byte, body string, bodyLine int, err error) {
 	lines := strings.Split(string(content), "\n")
 	if len(lines) == 0 || strings.TrimRight(lines[0], "\r") != fence {
-		return nil, "", ErrNoFrontmatter
+		return nil, "", 0, ErrNoFrontmatter
 	}
 
 	closeIdx := -1
@@ -57,16 +61,22 @@ func splitFrontmatter(content []byte) (front []byte, body string, err error) {
 		}
 	}
 	if closeIdx == -1 {
-		return nil, "", ErrUnterminatedFrontmatter
+		return nil, "", 0, ErrUnterminatedFrontmatter
 	}
 
 	front = []byte(strings.Join(lines[1:closeIdx], "\n"))
 
 	rest := lines[closeIdx+1:]
+	bodyLine = closeIdx + 2 // 1-indexed file line of the first body line
 	if len(rest) > 0 && strings.TrimSpace(rest[0]) == "" {
 		rest = rest[1:]
+		bodyLine++
 	}
-	return front, strings.Join(rest, "\n"), nil
+	body = strings.Join(rest, "\n")
+	if strings.TrimSpace(body) == "" {
+		bodyLine = 0
+	}
+	return front, body, bodyLine, nil
 }
 
 // parseFrontmatter parses the raw frontmatter bytes into a mapping node (used

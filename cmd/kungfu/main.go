@@ -11,8 +11,11 @@ import (
 )
 
 func main() {
-	if err := cli.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, cli.FormatError(err))
-		os.Exit(1)
+	err := cli.Execute()
+	if err != nil {
+		if msg := err.Error(); msg != "" {
+			fmt.Fprintln(os.Stderr, cli.FormatError(err))
+		}
 	}
+	os.Exit(cli.ExitCodeForError(err))
 }

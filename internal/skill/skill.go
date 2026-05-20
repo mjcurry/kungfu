@@ -66,7 +66,7 @@ func LoadFile(path string) (*Skill, error) {
 		return nil, fmt.Errorf("skill: reading %s: %w", path, err)
 	}
 
-	front, body, err := splitFrontmatter(content)
+	front, body, _, err := SplitFrontmatter(content)
 	if err != nil {
 		return nil, fmt.Errorf("skill: %s: %w", path, err)
 	}

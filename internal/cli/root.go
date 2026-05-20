@@ -1,9 +1,11 @@
 // Package cli implements the kungfu command-line interface, built on cobra.
 //
 // The root command owns the global flags (--no-color, --skills-dir,
-// --config) and, in its persistent pre-run, resolves configuration and
-// attaches it to the command context so subcommands can retrieve it with
-// AppFromContext.
+// --config, --target, --scope) and, in its persistent pre-run, resolves
+// configuration and attaches it to the command context so subcommands can
+// retrieve it with AppFromContext. Target / scope resolution is done by the
+// individual subcommands because the right "empty" behavior varies (list
+// uses every configured target; install uses default_targets).
 package cli
 
 import (
@@ -21,9 +23,16 @@ import (
 type App struct {
 	// Config is the loaded (or default) configuration.
 	Config *config.Config
-	// SkillsDir is the effective skills directory after applying flag,
-	// environment, config, and default precedence, with ~ expanded.
+
+	// SkillsDir is the legacy effective skills directory (PR 1 era).
 	SkillsDir string
+
+	// TargetFlag is the raw value of --target. Empty when not set; each
+	// command interprets empty in its own way.
+	TargetFlag string
+
+	// ScopeFlag is the raw value of --scope. Empty when not set.
+	ScopeFlag string
 }
 
 type contextKey struct{}
@@ -35,6 +44,8 @@ var (
 	flagNoColor   bool
 	flagSkillsDir string
 	flagConfig    string
+	flagTarget    string
+	flagScope     string
 )
 
 // NewRootCmd constructs the root cobra command and its subcommand tree. A
@@ -42,8 +53,8 @@ var (
 func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "kungfu",
-		Short:         "Manage AI agent skills",
-		Long:          "kungfu manages AI agent skills: directories containing a SKILL.md\nfile that teach an agent a new capability via progressive disclosure.",
+		Short:         "Manage AI agent skills across every supported agent",
+		Long:          "kungfu is the package manager for your agent skills.\nOne CLI, every agent: install one skill to claude, codex, cursor, copilot — together.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
@@ -56,8 +67,10 @@ func NewRootCmd() *cobra.Command {
 				return err
 			}
 			app := &App{
-				Config:    cfg,
-				SkillsDir: cfg.ResolveSkillsDir(flagSkillsDir),
+				Config:     cfg,
+				SkillsDir:  cfg.ResolveSkillsDir(flagSkillsDir),
+				TargetFlag: flagTarget,
+				ScopeFlag:  flagScope,
 			}
 			cmd.SetContext(context.WithValue(cmd.Context(), appContextKey, app))
 			return nil
@@ -66,10 +79,13 @@ func NewRootCmd() *cobra.Command {
 
 	pf := root.PersistentFlags()
 	pf.BoolVar(&flagNoColor, "no-color", false, "disable colored output")
-	pf.StringVar(&flagSkillsDir, "skills-dir", "", "skills directory (overrides config and $"+config.EnvSkillsDir+")")
+	pf.StringVar(&flagSkillsDir, "skills-dir", "", "legacy skills directory (PR 1; overrides config and $"+config.EnvSkillsDir+")")
 	pf.StringVar(&flagConfig, "config", "", "path to config file (default "+config.Path()+")")
+	pf.StringVar(&flagTarget, "target", "", "comma-separated target names, or \"all\"; empty uses each command's default")
+	pf.StringVar(&flagScope, "scope", "", "\"personal\" or \"project\"; empty uses default_scope")
 
 	root.AddCommand(newVersionCmd())
+	root.AddCommand(newLintCmd())
 	return root
 }
 
