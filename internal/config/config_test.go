@@ -197,10 +197,11 @@ func TestLoadMissingTargetsSectionUsesBuiltins(t *testing.T) {
 	if claude.PersonalDir != want {
 		t.Errorf("claude.PersonalDir = %q, want %q", claude.PersonalDir, want)
 	}
-	// Cursor still has no personal dir.
+	// Cursor now ships with a personal scope just like the other targets.
 	cursor, _ := target.ByName("cursor", cfg.Targets)
-	if cursor.PersonalDir != "" {
-		t.Errorf("cursor.PersonalDir = %q, want empty", cursor.PersonalDir)
+	wantCursor := filepath.Join(home, ".cursor", "skills")
+	if cursor.PersonalDir != wantCursor {
+		t.Errorf("cursor.PersonalDir = %q, want %q", cursor.PersonalDir, wantCursor)
 	}
 }
 

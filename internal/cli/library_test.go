@@ -22,7 +22,9 @@ type multiTargetEnv struct {
 }
 
 // setupMultiTargetEnv writes a config file pointing each builtin target's
-// personal_dir at a temp directory and returns the env handle.
+// personal_dir at a temp directory and returns the env handle. Every target
+// — including cursor — is configured with a real personal scope so tests
+// install into the tempdir tree rather than the runner's real home.
 func setupMultiTargetEnv(t *testing.T) *multiTargetEnv {
 	t.Helper()
 	root := t.TempDir()
@@ -36,13 +38,10 @@ func setupMultiTargetEnv(t *testing.T) *multiTargetEnv {
 	// Use TOML literal strings (single-quoted) for paths so backslashes
 	// in Windows tempdir paths are not interpreted as escape sequences.
 	cfg := "default_targets = [\"claude\"]\ndefault_scope = \"personal\"\n\n"
-	for _, name := range []string{"claude", "codex", "copilot"} {
+	for _, name := range []string{"claude", "codex", "cursor", "copilot"} {
 		cfg += "[targets." + name + "]\n"
 		cfg += "personal_dir = '" + env.dirs[name] + "'\n\n"
 	}
-	// Leave cursor's personal_dir unset so the cursor-personal skip path
-	// remains testable end-to-end.
-	cfg += "[targets.cursor]\nproject_dir = '.cursor/skills'\n"
 
 	env.configPath = filepath.Join(root, "config.toml")
 	if err := os.WriteFile(env.configPath, []byte(cfg), 0o644); err != nil {
@@ -146,7 +145,9 @@ func TestInstall_MultiTarget(t *testing.T) {
 	}
 }
 
-func TestInstall_AllSkipsCursorPersonal(t *testing.T) {
+func TestInstall_AllInstallsToEveryTarget(t *testing.T) {
+	// All four builtin targets ship with a personal scope now, so
+	// `install --target all` should land in every configured target.
 	env := setupMultiTargetEnv(t)
 	src := writeFixtureSkill(t, t.TempDir(), "broad", "Use this skill when broad.", false)
 
@@ -154,10 +155,7 @@ func TestInstall_AllSkipsCursorPersonal(t *testing.T) {
 	if exitCode(err) != 0 {
 		t.Fatalf("exit %d, want 0; out:\n%s", exitCode(err), out.String())
 	}
-	if !strings.Contains(out.String(), "cursor") || !strings.Contains(out.String(), "skipped") {
-		t.Errorf("expected cursor skip message:\n%s", out.String())
-	}
-	for _, name := range []string{"claude", "codex", "copilot"} {
+	for _, name := range []string{"claude", "codex", "cursor", "copilot"} {
 		if _, err := os.Stat(filepath.Join(env.dirs[name], "broad", "SKILL.md")); err != nil {
 			t.Errorf("%s missing SKILL.md: %v", name, err)
 		}

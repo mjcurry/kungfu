@@ -18,10 +18,13 @@ func TestBuiltins(t *testing.T) {
 			t.Errorf("Builtins()[%d].Name = %q, want %q", i, got[i].Name, name)
 		}
 	}
-	// Cursor explicitly has no personal directory.
+	// Every builtin target carries both a personal and project directory.
 	for _, tgt := range got {
-		if tgt.Name == "cursor" && tgt.PersonalDir != "" {
-			t.Errorf("cursor.PersonalDir = %q, want empty", tgt.PersonalDir)
+		if tgt.PersonalDir == "" {
+			t.Errorf("%s.PersonalDir is empty; every builtin should have a personal scope", tgt.Name)
+		}
+		if tgt.ProjectDir == "" {
+			t.Errorf("%s.ProjectDir is empty", tgt.Name)
 		}
 	}
 }

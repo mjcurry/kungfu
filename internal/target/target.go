@@ -76,7 +76,7 @@ func Builtins() []Target {
 	return []Target{
 		{Name: "claude", PersonalDir: "~/.claude/skills", ProjectDir: ".claude/skills"},
 		{Name: "codex", PersonalDir: "~/.codex/skills", ProjectDir: ".codex/skills"},
-		{Name: "cursor", PersonalDir: "", ProjectDir: ".cursor/skills"},
+		{Name: "cursor", PersonalDir: "~/.cursor/skills", ProjectDir: ".cursor/skills"},
 		{Name: "copilot", PersonalDir: "~/.copilot/skills", ProjectDir: ".github/skills"},
 	}
 }
