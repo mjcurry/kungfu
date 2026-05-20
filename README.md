@@ -9,10 +9,16 @@
 `kungfu` installs, lints, and manages [Agent Skills](https://agentskills.io)
 — `SKILL.md` directories that teach AI agents a new capability via the
 progressive-disclosure pattern. With one command, ship the same skill to
-every agent on your machine:
+every agent on your machine — from **a local directory** *or* **a GitHub
+repo**:
 
 ```sh
-kungfu install user/repo --target claude,codex,cursor,copilot
+# From a local path:
+kungfu install ./my-skill --target claude,codex,cursor,copilot
+
+# From a public GitHub repo (the same flags apply):
+kungfu install https://github.com/nextlevelbuilder/ui-ux-pro-max-skill \
+    --target claude,codex,cursor,copilot
 ```
 
 Or scaffold your own:
@@ -55,38 +61,68 @@ Run `kungfu <command> --help` for the full flag listing.
 ## Quick start
 
 ```sh
-make build                                    # → ./bin/kungfu
+make build                                                          # → ./bin/kungfu
 
 # Make your own skill from a built-in template:
-./bin/kungfu new my-skill                     # interactive
-./bin/kungfu lint my-skill                    # scaffolds are guaranteed lint-clean
+./bin/kungfu new my-skill                                           # interactive
+./bin/kungfu lint my-skill                                          # scaffolds are guaranteed lint-clean
 
-# Or fetch someone else's:
-./bin/kungfu install user/repo --target all   # claude + codex + cursor + copilot
-./bin/kungfu install user/repo@v1.0.0         # pin to a tag
-./bin/kungfu install user/repo/skills/csv     # subpath inside a monorepo
+# Install one you already have on disk:
+./bin/kungfu install ./my-skill --target all                        # → claude + codex + cursor + copilot
 
-./bin/kungfu list                             # see what's installed where
-./bin/kungfu show my-skill --target claude    # disambiguate with --target
+# Install one from GitHub:
+./bin/kungfu install https://github.com/nextlevelbuilder/ui-ux-pro-max-skill
+
+./bin/kungfu list                                                   # see what's installed where
+./bin/kungfu show my-skill --target claude                          # disambiguate with --target
 ```
 
-## Installing from GitHub
+## Installing skills
 
-`kungfu install` accepts several source forms in addition to local paths:
+`kungfu install <source>` accepts **either a local directory or a GitHub
+source**; the same `--target`, `--scope`, `--force`, and `--dry-run` flags
+apply to both.
 
-| Source                                   | Meaning                                            |
-| ---------------------------------------- | -------------------------------------------------- |
-| `user/repo`                              | default branch                                      |
-| `user/repo@v1.0.0`                       | tag (or branch / short SHA / full SHA)             |
-| `user/repo/path/to/skill`                | subdirectory inside the repo                       |
-| `user/repo/path/to/skill@v1.0.0`         | subdirectory at a specific ref                     |
-| `github.com/user/repo[…]`                | same forms with an explicit host                   |
-| `https://github.com/user/repo[…]`        | a pasted browser URL                               |
+### From a local path
 
-Each remote install stamps the destination's frontmatter with provenance:
+A local directory is anything that contains a `SKILL.md`. Paths can be
+relative or absolute:
+
+```sh
+kungfu install ./my-skill                                  # relative
+kungfu install /Users/mike/work/skills/csv-formatter       # absolute
+kungfu install ./my-skill --target claude,codex --force    # overwrite existing installs
+```
+
+Local installs **do not** write provenance frontmatter — the source is on
+your machine, not pinned to a commit.
+
+### From GitHub
+
+A GitHub source may be written several ways; pick whichever you have
+handy (browser URL, `user/repo` shortcut, etc.):
+
+| Source                                                                                | Meaning                                            |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `nextlevelbuilder/ui-ux-pro-max-skill`                                                | default branch                                     |
+| `nextlevelbuilder/ui-ux-pro-max-skill@v1.0.0`                                         | tag (or branch / short SHA / full SHA)             |
+| `nextlevelbuilder/ui-ux-pro-max-skill/path/to/skill`                                  | subdirectory inside the repo                       |
+| `nextlevelbuilder/ui-ux-pro-max-skill/path/to/skill@v1.0.0`                           | subdirectory at a specific ref                     |
+| `github.com/nextlevelbuilder/ui-ux-pro-max-skill[…]`                                  | same forms with an explicit host                   |
+| `https://github.com/nextlevelbuilder/ui-ux-pro-max-skill[…]`                          | a pasted browser URL                               |
+
+Example:
+
+```sh
+kungfu install https://github.com/nextlevelbuilder/ui-ux-pro-max-skill \
+    --target claude,codex,cursor,copilot
+```
+
+Each remote install stamps the destination's frontmatter with provenance
+so you can tell at a glance where an installed skill came from:
 
 ```yaml
-kungfu_source: github.com/user/repo
+kungfu_source: github.com/nextlevelbuilder/ui-ux-pro-max-skill
 kungfu_ref: v1.0.0
 kungfu_sha: a1b2c3d4e5f6…           # 40-char commit SHA
 kungfu_installed_at: 2026-05-19T03:04:05Z
