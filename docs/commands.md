@@ -15,6 +15,34 @@ The list, show, remove, and update commands treat **empty `--target`** as
 
 ---
 
+## `kungfu self-update`
+
+Replace the running `kungfu` binary with the latest release from GitHub.
+
+```
+kungfu self-update [--check] [--version <tag>] [--yes|-y]
+```
+
+| Flag         | Notes                                                                  |
+| ------------ | ---------------------------------------------------------------------- |
+| `--check`    | Print whether an update is available, then exit 0 without installing. |
+| `--version`  | Install a specific tag (e.g. `v0.1.0`) instead of the latest release. |
+| `--yes`, `-y`| Skip the confirmation prompt.                                          |
+
+The flow: GET the GitHub "latest release" API → download the
+`kungfu_<version>_<os>_<arch>.tar.gz` for your platform + the matching
+checksums file → verify sha256 → extract → smoke-test the new binary →
+atomically rename it over the running one.
+
+The binary must be in a directory writable by your user; if it lives in
+`/usr/local/bin`, you'll need to rerun under `sudo` (or reinstall to
+`$HOME/.local/bin`).
+
+Exit codes: 0 already-up-to-date or successfully updated, 2 user
+declined, 3 network / I/O / checksum failure.
+
+---
+
 ## `kungfu version`
 
 Print build info.
