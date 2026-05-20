@@ -26,6 +26,13 @@ var pathExtensions = []string{
 
 // ReferencesBroken flags markdown links and path-like inline code spans in
 // the body that point at files which do not exist under the skill directory.
+//
+// Severity is Warning. Third-party skills in the wild routinely reference
+// repo-root assets, sibling-skill content, or files the author simply
+// forgot to ship; treating this as an install-blocking error is too
+// strict. The diagnostic is still surfaced so authors can see and fix it,
+// and `kungfu lint --strict` will promote it back to an exit-non-zero
+// signal when you want CI-style enforcement.
 type ReferencesBroken struct{}
 
 func (ReferencesBroken) ID() string { return "references/broken" }
@@ -62,7 +69,7 @@ func (ReferencesBroken) Check(s *skill.Skill) []Diagnostic {
 			diags = append(diags, Diagnostic{
 				Path:     file,
 				Line:     lineForNode(body, n, bodyLine),
-				Severity: SeverityError,
+				Severity: SeverityWarning,
 				Rule:     "references/broken",
 				Message:  "linked file " + target + " does not exist in the skill",
 			})
@@ -74,7 +81,7 @@ func (ReferencesBroken) Check(s *skill.Skill) []Diagnostic {
 			diags = append(diags, Diagnostic{
 				Path:     file,
 				Line:     lineForNode(body, n, bodyLine),
-				Severity: SeverityError,
+				Severity: SeverityWarning,
 				Rule:     "references/broken",
 				Message:  "code span references " + content + " which does not exist in the skill",
 			})

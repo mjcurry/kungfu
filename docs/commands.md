@@ -109,8 +109,17 @@ fixes in scripts. Errors block install; warnings are advisory.
 | `frontmatter` | `missing`, `malformed`, `name-missing`, `name-mismatch`, `name-format`, `description-missing`, `description-too-long`, `allowed-tools-type`               |
 | `description` | `no-trigger-phrase`, `vague`                                                                                                                              |
 | `body`        | `empty`                                                                                                                                                   |
-| `references`  | `broken`                                                                                                                                                  |
+| `references`  | `broken` *(warning — third-party skills commonly reference repo-root or sibling-skill content)*                                                            |
 | `filenames`   | `non-ascii`                                                                                                                                               |
+
+The `frontmatter/name-format` rule accepts an optional `<namespace>:`
+prefix used by Claude slash commands (e.g. `ckm:banner-design`). Each
+segment must still be lowercase kebab-case.
+
+The `references/broken` rule treats code spans starting with `/` as
+slash-command references (not file paths) and skips anything containing
+`{` or `}` (template placeholders), so those do not generate false
+positives.
 
 | Flag        | Notes                                                                                  |
 | ----------- | -------------------------------------------------------------------------------------- |

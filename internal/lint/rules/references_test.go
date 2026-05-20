@@ -88,6 +88,20 @@ func TestReferencesBroken(t *testing.T) {
 	}
 }
 
+func TestReferencesBrokenSeverityIsWarning(t *testing.T) {
+	// Broken references are reported as warnings, not errors, so install
+	// does not block on imperfect third-party content. `kungfu lint
+	// --strict` can still promote them to a failing exit code.
+	dir := writeRefSkill(t, "Run `scripts/missing.sh` to start.\n", nil)
+	diags := ReferencesBroken{}.Check(&skill.Skill{Dir: dir})
+	if len(diags) != 1 {
+		t.Fatalf("got %d diags, want 1: %v", len(diags), diags)
+	}
+	if diags[0].Severity != SeverityWarning {
+		t.Errorf("Severity = %v, want SeverityWarning", diags[0].Severity)
+	}
+}
+
 func TestReferencesBrokenLineNumber(t *testing.T) {
 	body := "# Heading\n" +
 		"\n" +
