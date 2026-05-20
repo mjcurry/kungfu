@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="loading-skills.gif" alt="Tank loading skills into Neo" width="520">
+  <img src="kungfu-logo.png" alt="kungfu" width="220">
 </p>
 
 <h1 align="center">kungfu</h1>
@@ -24,12 +24,12 @@ back into sync with one command.
 
 ## Demo
 
-<!-- TODO: record an asciinema cast of new → lint → install → list → update
-     and embed it here. See docs/release.md for the recording convention. -->
+<p align="center">
+  <img src="loading-skills.gif" alt="Tank loading skills into Neo" width="520">
+</p>
 
-> ⏱ A ~30-second demo cast is planned for v1.0; until it lands, the
-> [Quickstart](#quickstart) section walks through the same flow with copy-pastable
-> commands.
+<!-- TODO: replace the GIF above with a recorded asciinema cast of
+     new → lint → install → list → update, ~30 seconds, no cuts. -->
 
 ## Install
 
@@ -75,28 +75,78 @@ then move `kungfu` somewhere on your PATH.
 kungfu new csv-formatter
 kungfu lint csv-formatter
 
-# 2. Or fetch one from GitHub:
+# 2. Install a skill you already have on disk:
+kungfu install ./csv-formatter --target claude,codex,cursor,copilot
+
+# 3. Or fetch one from GitHub (provenance gets recorded for updates):
 kungfu install https://github.com/nextlevelbuilder/ui-ux-pro-max-skill \
     --target claude,codex,cursor,copilot
 
-# 3. See what's installed where:
+# 4. See what's installed where:
 kungfu list
 
-# 4. Read a skill the way an agent would:
+# 5. Read a skill the way an agent would:
 kungfu show ui-ux-pro-max-skill
 
-# 5. Bring everything tracking a moving ref up to date:
+# 6. Bring everything tracking a moving ref up to date:
 kungfu update --all
 ```
 
+## Installing skills
+
+`kungfu install <source>` accepts **either a local directory or a GitHub
+source**; the same `--target`, `--scope`, `--force`, and `--dry-run` flags
+apply to both.
+
+### From a local path
+
+Any directory that contains a `SKILL.md`, relative or absolute:
+
+```sh
+kungfu install ./csv-formatter
+kungfu install /Users/mike/work/skills/csv-formatter
+kungfu install ./csv-formatter --target claude,codex --force
+```
+
+Local installs **do not** stamp provenance — the source lives on your
+machine, not a commit you can refetch.
+
+### From GitHub
+
+A GitHub source can be written several ways; pick whichever you have
+handy (browser URL, `user/repo` shortcut, etc.):
+
+| Source                                                                                | Meaning                                            |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `nextlevelbuilder/ui-ux-pro-max-skill`                                                | default branch                                     |
+| `nextlevelbuilder/ui-ux-pro-max-skill@v1.0.0`                                         | tag (or branch / short SHA / full SHA)             |
+| `nextlevelbuilder/ui-ux-pro-max-skill/path/to/skill`                                  | subdirectory inside the repo                       |
+| `nextlevelbuilder/ui-ux-pro-max-skill/path/to/skill@v1.0.0`                           | subdirectory at a specific ref                     |
+| `github.com/nextlevelbuilder/ui-ux-pro-max-skill[…]`                                  | same forms with an explicit host                   |
+| `https://github.com/nextlevelbuilder/ui-ux-pro-max-skill[…]`                          | a pasted browser URL                               |
+
+Each remote install stamps the destination's frontmatter with provenance so
+a later `kungfu update` knows where the skill came from:
+
+```yaml
+kungfu_source: github.com/nextlevelbuilder/ui-ux-pro-max-skill
+kungfu_ref: v1.0.0
+kungfu_sha: a1b2c3d4e5f6…           # 40-char commit SHA
+kungfu_installed_at: 2026-05-19T03:04:05Z
+```
+
+Tarballs are cached at `$XDG_CACHE_HOME/kungfu/tarballs/` for 7 days. Use
+`--no-cache` to bypass, `--ref` to set the ref via flag, and `--yes` to skip
+the pre-install confirmation.
+
 ## Supported agents
 
-| Agent     | Personal scope                  | Project scope        | Status |
-| --------- | ------------------------------- | -------------------- | ------ |
-| Claude    | `~/.claude/skills`              | `.claude/skills`     | ✅      |
-| Codex     | `~/.codex/skills`               | `.codex/skills`      | ✅      |
-| Cursor    | *(none — project scope only)*   | `.cursor/skills`     | ✅      |
-| Copilot   | `~/.copilot/skills`             | `.github/skills`     | ✅      |
+| Agent     | Personal scope        | Project scope        | Status |
+| --------- | --------------------- | -------------------- | ------ |
+| Claude    | `~/.claude/skills`    | `.claude/skills`     | ✅      |
+| Codex     | `~/.codex/skills`     | `.codex/skills`      | ✅      |
+| Cursor    | `~/.cursor/skills`    | `.cursor/skills`     | ✅      |
+| Copilot   | `~/.copilot/skills`   | `.github/skills`     | ✅      |
 
 The format every agent reads is described in [docs/skill-format.md](docs/skill-format.md).
 
@@ -128,18 +178,11 @@ When you `kungfu install user/repo`, the skill is fetched from GitHub
 linted before it is allowed near your skills directories, then atomically
 copied into each configured target via a `.tmp-<random>` → rename → cleanup
 sequence that survives interruption. Four provenance fields are appended to
-the installed `SKILL.md`:
+the installed `SKILL.md` (see above), and `kungfu update` reads them back
+to refresh the skill in place.
 
-```yaml
-kungfu_source: github.com/user/repo
-kungfu_ref: v1.0.0
-kungfu_sha: a1b2c3d4e5f6…
-kungfu_installed_at: 2026-05-19T03:04:05Z
-```
-
-`kungfu update` reads those back, re-resolves the ref, and re-installs when
-the SHA has moved. Skills you created with `kungfu new` or installed locally
-have no provenance and are skipped — they're not on a remote leash.
+Skills you created with `kungfu new` or installed from a local path have no
+provenance and are skipped by `update` — they aren't on a remote leash.
 
 ## Roadmap
 
