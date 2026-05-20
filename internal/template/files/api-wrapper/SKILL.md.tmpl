@@ -1,0 +1,42 @@
+---
+name: {{.Name}}
+description: Use this skill when {{.Description}}
+---
+
+# {{.Name}}
+
+A skill for calling an external HTTP API on the user's behalf.
+
+## When to use
+
+Use this skill when:
+- The user asks for live data from a specific service.
+- A workflow needs an API call the user does not want to script themselves.
+
+Do not use this skill for:
+- Web scraping without an API contract.
+- Tasks where local data already answers the question.
+
+## Auth
+
+The wrapper reads credentials from the environment. Never hardcode
+secrets in this skill or in chat output. Required variables:
+
+- `API_BASE_URL` — base URL of the service.
+- `API_TOKEN` — bearer token; obtained out of band.
+
+Confirm with the user before making any non-idempotent request.
+
+## Workflow
+
+1. **Identify the endpoint** the user wants.
+2. **Build the request** via `scripts/call.sh <endpoint>`. Pass curl
+   flags after the endpoint argument.
+3. **Inspect the response** before returning. If the status is non-2xx,
+   surface the error body verbatim instead of guessing what went wrong.
+4. **Summarise** the relevant fields rather than dumping the full JSON.
+
+## Tools
+
+- `scripts/call.sh` — bash + curl wrapper that injects auth and prints
+  the JSON response to stdout.

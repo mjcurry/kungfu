@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""Quick descriptive statistics for a CSV file.
+
+Part of the {{.Name}} skill. Reads CSV from --input or stdin and prints
+per-column descriptive statistics for any numeric columns.
+"""
+
+import argparse
+import csv
+import statistics
+import sys
+
+
+def summarise(rows, header):
+    """Return one summary line per numeric column."""
+    cols = [[] for _ in header]
+    for row in rows:
+        for i, cell in enumerate(row[: len(header)]):
+            try:
+                cols[i].append(float(cell))
+            except ValueError:
+                pass
+
+    lines = []
+    for name, values in zip(header, cols):
+        if not values:
+            lines.append(f"{name}: non-numeric")
+            continue
+        lines.append(
+            f"{name}: n={len(values)} "
+            f"mean={statistics.mean(values):.3f} "
+            f"min={min(values):.3f} max={max(values):.3f}"
+        )
+    return lines
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input", help="CSV file path (default: stdin)")
+    args = parser.parse_args()
+
+    fh = open(args.input, newline="") if args.input else sys.stdin
+    try:
+        reader = csv.reader(fh)
+        header = next(reader, None)
+        if header is None:
+            print("no data", file=sys.stderr)
+            return 1
+        for line in summarise(reader, header):
+            print(line)
+    finally:
+        if args.input:
+            fh.close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

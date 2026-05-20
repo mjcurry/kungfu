@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -18,11 +19,24 @@ import (
 // FileName is the canonical name of the file that defines a skill.
 const FileName = "SKILL.md"
 
+// Frontmatter keys for the provenance fields written when a skill is
+// installed from a remote source. The kungfu_ prefix is deliberate: other
+// tools (e.g. gh skill) use source_repo / source_ref / source_sha, and a
+// dedicated namespace lets both tools coexist without clobbering each
+// other's metadata.
+const (
+	FrontmatterSource      = "kungfu_source"
+	FrontmatterRef         = "kungfu_ref"
+	FrontmatterSHA         = "kungfu_sha"
+	FrontmatterInstalledAt = "kungfu_installed_at"
+)
+
 // Skill is a single skill loaded from a SKILL.md file.
 //
-// The explicitly modeled fields (Name, Description, AllowedTools) are kept in
-// sync with the underlying frontmatter on Save. Any other frontmatter fields
-// are retained verbatim so a Load followed by a Save does not lose data.
+// The explicitly modeled fields (Name, Description, AllowedTools, plus the
+// provenance fields when present) are kept in sync with the underlying
+// frontmatter on Save. Any other frontmatter fields are retained verbatim so
+// a Load followed by a Save does not lose data.
 type Skill struct {
 	// Dir is the directory that contains the SKILL.md file.
 	Dir string
@@ -37,6 +51,14 @@ type Skill struct {
 	// AllowedTools optionally restricts the tools the skill may invoke,
 	// from the frontmatter `allowed-tools`. It is nil when unset.
 	AllowedTools []string
+
+	// Source, Ref, SHA, and InstalledAt are the provenance fields written
+	// by `kungfu install <github-source>`. They are empty for locally
+	// installed and scaffolded skills.
+	Source      string // kungfu_source
+	Ref         string // kungfu_ref
+	SHA         string // kungfu_sha
+	InstalledAt string // kungfu_installed_at (RFC3339)
 
 	// Body is the markdown content that follows the frontmatter block.
 	Body string
@@ -79,7 +101,7 @@ func LoadFile(path string) (*Skill, error) {
 		return nil, fmt.Errorf("skill: %s: %w", path, ErrMissingName)
 	}
 
-	return &Skill{
+	s := &Skill{
 		Dir:          filepath.Dir(path),
 		Name:         fields.Name,
 		Description:  fields.Description,
@@ -88,7 +110,26 @@ func LoadFile(path string) (*Skill, error) {
 		Frontmatter:  decoded,
 		node:         node,
 		raw:          content,
-	}, nil
+	}
+	s.Source = stringField(decoded[FrontmatterSource])
+	s.Ref = stringField(decoded[FrontmatterRef])
+	s.SHA = stringField(decoded[FrontmatterSHA])
+	s.InstalledAt = stringField(decoded[FrontmatterInstalledAt])
+	return s, nil
+}
+
+// stringField coerces a frontmatter value into a string. yaml.v3 auto-decodes
+// values that look like timestamps into time.Time, so a raw `kungfu_installed_at:
+// 2026-05-19T00:00:00Z` would lose its string-ness without this fallback.
+func stringField(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case time.Time:
+		return x.Format(time.RFC3339)
+	default:
+		return ""
+	}
 }
 
 // Save writes the skill back to its SKILL.md file. The modeled fields are

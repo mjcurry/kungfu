@@ -128,6 +128,19 @@ func (s *Skill) render() ([]byte, error) {
 	} else {
 		deleteKey(node, "allowed-tools")
 	}
+	// Provenance fields: write when set, delete when empty.
+	for _, kv := range []struct{ key, val string }{
+		{FrontmatterSource, s.Source},
+		{FrontmatterRef, s.Ref},
+		{FrontmatterSHA, s.SHA},
+		{FrontmatterInstalledAt, s.InstalledAt},
+	} {
+		if kv.val == "" {
+			deleteKey(node, kv.key)
+		} else {
+			setScalar(node, kv.key, kv.val)
+		}
+	}
 
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)

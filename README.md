@@ -12,7 +12,14 @@ progressive-disclosure pattern. With one command, ship the same skill to
 every agent on your machine:
 
 ```sh
-kungfu install ./my-skill --target claude,codex,cursor,copilot
+kungfu install user/repo --target claude,codex,cursor,copilot
+```
+
+Or scaffold your own:
+
+```sh
+kungfu new my-skill                # interactive
+kungfu new --yes --template data my-skill --description "..."
 ```
 
 <p align="center">
@@ -34,10 +41,11 @@ Custom targets and per-target overrides are configurable; see
 ## Commands
 
 ```
+kungfu new     <name>   [--template ...]      # scaffold a new skill from a built-in template
+kungfu install <source> [--target ...]        # install (local path or GitHub: user/repo[@ref][/sub])
 kungfu list                                   # list installed skills (every target)
-kungfu install <source> [--target ...]        # install to one or more targets
-kungfu remove  <name>   [--target ...]        # remove from matching targets
 kungfu show    <name>   [--target ...]        # print a skill (markdown-rendered)
+kungfu remove  <name>   [--target ...]        # remove from matching targets
 kungfu lint    <path>                         # validate against the rule set
 kungfu version                                # print build info
 ```
@@ -49,11 +57,59 @@ Run `kungfu <command> --help` for the full flag listing.
 ```sh
 make build                                    # → ./bin/kungfu
 
-./bin/kungfu lint ./my-skill                  # check before shipping
-./bin/kungfu install ./my-skill --target all  # claude + codex + cursor + copilot
+# Make your own skill from a built-in template:
+./bin/kungfu new my-skill                     # interactive
+./bin/kungfu lint my-skill                    # scaffolds are guaranteed lint-clean
+
+# Or fetch someone else's:
+./bin/kungfu install user/repo --target all   # claude + codex + cursor + copilot
+./bin/kungfu install user/repo@v1.0.0         # pin to a tag
+./bin/kungfu install user/repo/skills/csv     # subpath inside a monorepo
+
 ./bin/kungfu list                             # see what's installed where
 ./bin/kungfu show my-skill --target claude    # disambiguate with --target
 ```
+
+## Installing from GitHub
+
+`kungfu install` accepts several source forms in addition to local paths:
+
+| Source                                   | Meaning                                            |
+| ---------------------------------------- | -------------------------------------------------- |
+| `user/repo`                              | default branch                                      |
+| `user/repo@v1.0.0`                       | tag (or branch / short SHA / full SHA)             |
+| `user/repo/path/to/skill`                | subdirectory inside the repo                       |
+| `user/repo/path/to/skill@v1.0.0`         | subdirectory at a specific ref                     |
+| `github.com/user/repo[…]`                | same forms with an explicit host                   |
+| `https://github.com/user/repo[…]`        | a pasted browser URL                               |
+
+Each remote install stamps the destination's frontmatter with provenance:
+
+```yaml
+kungfu_source: github.com/user/repo
+kungfu_ref: v1.0.0
+kungfu_sha: a1b2c3d4e5f6…           # 40-char commit SHA
+kungfu_installed_at: 2026-05-19T03:04:05Z
+```
+
+Tarballs are cached at `$XDG_CACHE_HOME/kungfu/tarballs/` for 7 days. Use
+`--no-cache` to bypass, `--ref` to set the ref via flag, and `--yes` to skip
+the pre-install confirmation.
+
+## Scaffolding new skills
+
+`kungfu new` walks you through creating a skill that will pass `kungfu lint`
+cleanly on first run. Four built-in templates ship today:
+
+| Template      | Use it for…                                                   |
+| ------------- | ------------------------------------------------------------- |
+| `basic`       | a minimal SKILL.md with placeholders.                         |
+| `document`    | producing structured prose documents (reports, memos, etc.).  |
+| `data`        | inspecting tabular data; ships a stdlib-Python helper script. |
+| `api-wrapper` | calling an HTTP API behind an env-driven `curl` wrapper.      |
+
+Interactive use prompts for template and description; pass `--yes
+--template … --description …` to drive it from CI.
 
 ## Configuration
 

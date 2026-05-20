@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Part of the {{.Name}} skill.
+# Wraps API calls so callers go through env-driven auth and consistent errors.
+
+set -euo pipefail
+
+if [[ $# -eq 0 ]]; then
+    cat <<'USAGE'
+Usage: scripts/call.sh <endpoint> [curl args...]
+
+Environment:
+  API_BASE_URL  base URL of the service (required)
+  API_TOKEN     bearer token (required)
+USAGE
+    exit 64
+fi
+
+: "${API_BASE_URL:?API_BASE_URL is not set}"
+: "${API_TOKEN:?API_TOKEN is not set}"
+
+endpoint="$1"
+shift
+
+curl -sSf \
+    -H "Authorization: Bearer ${API_TOKEN}" \
+    -H "Accept: application/json" \
+    "${API_BASE_URL}${endpoint}" \
+    "$@"

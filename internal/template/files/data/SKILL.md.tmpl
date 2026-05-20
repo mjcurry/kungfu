@@ -1,0 +1,42 @@
+---
+name: {{.Name}}
+description: Use this skill when {{.Description}}
+---
+
+# {{.Name}}
+
+A skill for inspecting and summarising structured data — CSV files,
+spreadsheets, or any tabular input the user shares.
+
+## When to use
+
+Use this skill when:
+- The user shares a CSV, TSV, or spreadsheet and asks what is in it.
+- A column needs descriptive statistics: counts, means, ranges.
+- The user asks for a summary they can paste into a report.
+
+Do not use this skill for:
+- Free-form text analysis without a table structure.
+- Large datasets that need a database; offer to scope down first.
+
+## Workflow
+
+1. **Inspect.** Confirm the column layout and the unit of analysis.
+   Identify the join key if multiple tables are involved.
+2. **Clean.** Decide how to treat missing values, malformed numbers,
+   and outliers. State the decision explicitly to the user.
+3. **Analyze.** Compute the requested statistics. For quick numeric
+   summaries run `scripts/analyze.py`.
+4. **Report.** Return a concise summary: what changed, what surprised
+   you, and what the user might do next.
+
+## Tools
+
+- `scripts/analyze.py` — run with a CSV path or pipe via stdin; prints
+  per-column descriptive statistics using only the Python stdlib.
+
+## Output format
+
+Default to a short bulleted summary followed by the numeric table when
+the user asks for "the numbers". Reserve narrative paragraphs for the
+"so what" interpretation.
