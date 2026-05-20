@@ -73,24 +73,6 @@ changelog:
       - 'Merge pull request'
       - 'Merge branch'
 
-# Homebrew tap. Skipped automatically when HOMEBREW_TAP_GITHUB_TOKEN is not
-# set so a release where the tap secret is missing still succeeds.
-brews:
-  - name: kungfu
-    skip_upload: '{{ if eq .Env.HOMEBREW_TAP_GITHUB_TOKEN "" }}true{{ else }}false{{ end }}'
-    repository:
-      owner: mjcurry
-      name: homebrew-kungfu
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
-    homepage: "https://github.com/mjcurry/kungfu"
-    description: "The package manager for your agent skills."
-    license: "MIT"
-    install: |
-      bin.install "kungfu"
-    test: |
-      system "#{bin}/kungfu", "version"
-
 release:
   github:
     owner: mjcurry
@@ -107,10 +89,6 @@ release:
     ## Install
 
     ```sh
-    # macOS / Linux via Homebrew (once the tap is configured):
-    brew install mjcurry/kungfu/kungfu
-
-    # macOS / Linux via curl|sh:
     curl -fsSL https://raw.githubusercontent.com/mjcurry/kungfu/main/install.sh | sh
     ```
 

@@ -34,6 +34,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # HOMEBREW_TAP_GITHUB_TOKEN is optional; when unset, goreleaser
-          # skips the brews upload step gracefully (see .goreleaser.yaml).
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

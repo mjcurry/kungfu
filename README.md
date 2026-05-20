@@ -32,12 +32,6 @@ back into sync with one command.
 
 ## Install
 
-### Homebrew (macOS, Linux)
-
-```sh
-brew install mjcurry/kungfu/kungfu
-```
-
 ### curl | sh (macOS, Linux)
 
 ```sh
@@ -66,6 +60,10 @@ shasum -a 256 -c kungfu_<version>_checksums.txt
 ```
 
 then move `kungfu` somewhere on your PATH.
+
+> A Homebrew tap is on the roadmap once the project lands a few real users;
+> until then, the installer script above is the recommended path on macOS
+> and Linux.
 
 ## Quickstart
 
