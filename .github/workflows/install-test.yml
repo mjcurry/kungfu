@@ -1,0 +1,109 @@
+name: install-test
+
+# Triggers on PRs that touch the installer or this workflow. Builds a
+# goreleaser snapshot, serves it from a local HTTP server, then drives
+# install.sh against it on Ubuntu, Alpine, and macOS to make sure the
+# script's POSIX-shell paths work on all three.
+on:
+  pull_request:
+    paths:
+      - install.sh
+      - .github/workflows/install-test.yml
+      - .goreleaser.yaml
+  workflow_dispatch: {}
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.discover.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build snapshot
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --snapshot --clean --skip=publish
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ""
+
+      - name: Discover snapshot version
+        id: discover
+        run: |
+          archive="$(ls dist/kungfu_*_linux_amd64.tar.gz | head -1)"
+          version="$(basename "$archive" | sed -E 's/^kungfu_(.+)_linux_amd64\.tar\.gz$/\1/')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "snapshot version: $version"
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-dist
+          path: dist/
+          retention-days: 1
+
+  # Run install.sh on each target OS, pointing it at a python http server
+  # that serves the snapshot artifacts.
+  install:
+    needs: snapshot
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: ubuntu
+          - os: ubuntu-latest
+            label: alpine
+            container: alpine:latest
+          - os: macos-latest
+            label: macos
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    steps:
+      - name: Prepare alpine
+        if: matrix.label == 'alpine'
+        run: apk add --no-cache curl tar python3 bash dash
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download snapshot dist
+        uses: actions/download-artifact@v4
+        with:
+          name: snapshot-dist
+          path: dist/
+
+      - name: Serve dist on localhost
+        run: |
+          cd dist
+          python3 -m http.server 8080 >/dev/null 2>&1 &
+          echo $! > /tmp/server.pid
+          sleep 1
+
+      - name: Run installer
+        env:
+          KUNGFU_VERSION: ${{ needs.snapshot.outputs.version }}
+          KUNGFU_INSTALL_BASE_URL: http://localhost:8080
+          KUNGFU_INSTALL_DEBUG: "1"
+        run: |
+          install_dir="$(mktemp -d)"
+          KUNGFU_INSTALL_DIR="$install_dir" sh install.sh
+          "$install_dir/kungfu" version
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f /tmp/server.pid ]; then
+            kill "$(cat /tmp/server.pid)" 2>/dev/null || true
+          fi
