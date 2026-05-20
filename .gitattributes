@@ -1,0 +1,16 @@
+# Go tooling assumes LF; Windows runners default to core.autocrlf=true and
+# would otherwise hand gofmt a CRLF working tree it considers unformatted.
+*.go        text eol=lf
+go.mod      text eol=lf
+go.sum      text eol=lf
+
+# Repo-side text files we also want consistent across platforms.
+*.md        text eol=lf
+*.toml      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+Makefile    text eol=lf
+
+# Binary assets — let git treat them as binary explicitly.
+*.gif       binary
+*.png       binary
