@@ -130,6 +130,11 @@ Remote installs append provenance frontmatter to the destination so a later
 `kungfu update` can re-fetch it; local installs do not. Tarballs are cached
 at `$XDG_CACHE_HOME/kungfu/tarballs/` for 7 days.
 
+When a repo is a *skill collection* (multiple `SKILL.md` files in nested
+directories), install auto-picks the nested skill if exactly one is
+present; it errors with a list and the subpath syntax suggestion when
+there are several.
+
 Exit codes: 0 success, 1 lint failure or every target unsupported, 2
 destination collision without `--force`, 3 partial / total I/O failure, 5
 network or tarball failure, 6 unrecognised source, 7 extracted source has

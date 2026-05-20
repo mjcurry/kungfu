@@ -210,6 +210,100 @@ func TestRemoteInstall_LintFailureBlocks(t *testing.T) {
 	}
 }
 
+func TestRemoteInstall_AutoDiscoversNestedSkill(t *testing.T) {
+	// Skill collections store one or more SKILL.md files in nested
+	// directories rather than at the repo root. With exactly one nested
+	// match, `kungfu install user/repo` should auto-pick it and bake the
+	// discovered subpath into the kungfu_source provenance value.
+	srv, env := setupRemoteEnv(t)
+	srv.AddRepo("acme", "single-nested", githubfake.Repo{
+		DefaultBranch: "main",
+		Refs:          map[string]string{"main": "9deadbeefdeadbeefdeadbeefdeadbeefdeadbee"},
+		Files: map[string]string{
+			"README.md":               "top-level readme",
+			"skills/csv/SKILL.md":     "---\nname: csv\ndescription: Use this skill when extracting CSV.\n---\n\nBody.\n",
+			"skills/csv/scripts/x.sh": "#!/bin/sh\n",
+		},
+	})
+
+	out, err := runRoot(t, env, "install", "--yes", "acme/single-nested")
+	if exitCode(err) != 0 {
+		t.Fatalf("exit %d: %v\nout:\n%s", exitCode(err), err, out.String())
+	}
+	dst := filepath.Join(env.dirs["claude"], "csv")
+	if _, err := os.Stat(filepath.Join(dst, "SKILL.md")); err != nil {
+		t.Errorf("SKILL.md missing at %s: %v", dst, err)
+	}
+	// The provenance must include the auto-discovered subpath so a later
+	// `kungfu update` re-fetches the same nested skill.
+	data, _ := os.ReadFile(filepath.Join(dst, "SKILL.md"))
+	if !strings.Contains(string(data), "kungfu_source: github.com/acme/single-nested/skills/csv") {
+		t.Errorf("kungfu_source missing auto-discovered subpath:\n%s", data)
+	}
+	if !strings.Contains(out.String(), "discovered skill") {
+		t.Errorf("expected 'discovered skill' notice in output:\n%s", out.String())
+	}
+}
+
+func TestRemoteInstall_MultipleSkillsRequireDisambiguation(t *testing.T) {
+	// A repo with several SKILL.md files in different subdirectories
+	// (e.g. anthropics/skills) is ambiguous. Auto-discovery refuses to
+	// pick one and exits with a list pointing at the subpath syntax.
+	srv, env := setupRemoteEnv(t)
+	srv.AddRepo("acme", "collection", githubfake.Repo{
+		DefaultBranch: "main",
+		Refs:          map[string]string{"main": "cdeadbeefdeadbeefdeadbeefdeadbeefdeadbee"},
+		Files: map[string]string{
+			"skills/csv/SKILL.md":  "---\nname: csv\ndescription: Use this skill when CSV.\n---\n\nBody.\n",
+			"skills/json/SKILL.md": "---\nname: json\ndescription: Use this skill when JSON.\n---\n\nBody.\n",
+			"skills/yaml/SKILL.md": "---\nname: yaml\ndescription: Use this skill when YAML.\n---\n\nBody.\n",
+		},
+	})
+
+	_, err := runRoot(t, env, "install", "--yes", "acme/collection")
+	if exitCode(err) != 7 {
+		t.Fatalf("exit %d, want 7; err=%v", exitCode(err), err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "this repo contains 3 skills") {
+		t.Errorf("expected disambiguation message naming 3 skills: %v", err)
+	}
+	for _, want := range []string{"skills/csv", "skills/json", "skills/yaml"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should list %q: %v", want, err)
+		}
+	}
+	// Nothing should have landed in any target.
+	for _, name := range []string{"csv", "json", "yaml"} {
+		if _, err := os.Stat(filepath.Join(env.dirs["claude"], name)); err == nil {
+			t.Errorf("%s leaked through to claude despite ambiguous source", name)
+		}
+	}
+}
+
+func TestRemoteInstall_DisambiguationViaSubpathStillWorks(t *testing.T) {
+	// Following the disambiguation hint, the user can pick one skill
+	// explicitly via the subpath syntax.
+	srv, env := setupRemoteEnv(t)
+	srv.AddRepo("acme", "collection", githubfake.Repo{
+		DefaultBranch: "main",
+		Refs:          map[string]string{"main": "edeadbeefdeadbeefdeadbeefdeadbeefdeadbee"},
+		Files: map[string]string{
+			"skills/csv/SKILL.md":  "---\nname: csv\ndescription: Use this skill when CSV.\n---\n\nBody.\n",
+			"skills/json/SKILL.md": "---\nname: json\ndescription: Use this skill when JSON.\n---\n\nBody.\n",
+		},
+	})
+
+	if _, err := runRoot(t, env, "install", "--yes", "acme/collection/skills/json"); exitCode(err) != 0 {
+		t.Fatalf("exit %d: %v", exitCode(err), err)
+	}
+	if _, err := os.Stat(filepath.Join(env.dirs["claude"], "json", "SKILL.md")); err != nil {
+		t.Errorf("explicit-subpath skill not installed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(env.dirs["claude"], "csv")); err == nil {
+		t.Errorf("csv leaked through when only json was requested")
+	}
+}
+
 func TestRemoteInstall_UnknownSourceExits6(t *testing.T) {
 	_, env := setupRemoteEnv(t)
 	// "not-a-source-string!" is neither a local path nor a valid GitHub

@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -168,19 +170,30 @@ func runRemoteInstall(cmd *cobra.Command, src *fetch.Source, force, dryRun, noLi
 	if err := fetch.Extract(tarPath, placeholder, src.Subpath); err != nil {
 		return &ExitError{Code: 7, Err: fmt.Errorf("install: %w", err)}
 	}
-	if _, err := os.Stat(filepath.Join(placeholder, skill.FileName)); err != nil {
-		msg := "install: extracted source has no SKILL.md"
-		if src.Subpath != "" {
-			msg = fmt.Sprintf("install: subpath %q does not contain a SKILL.md", src.Subpath)
-		}
-		return &ExitError{Code: 7, Err: errors.New(msg)}
+
+	// Some repos are skill *collections* — one repo with multiple
+	// SKILL.md files nested in subdirectories rather than at the root.
+	// discoverSkillRoot handles both shapes: a single root SKILL.md, a
+	// single nested SKILL.md (auto-pick), or multiple (error with a list
+	// telling the user how to pick).
+	skillRoot, discoveredSubpath, err := discoverSkillRoot(placeholder, src.Subpath)
+	if err != nil {
+		return &ExitError{Code: 7, Err: fmt.Errorf("install: %w", err)}
 	}
-	s, err := skill.Load(placeholder)
+	if discoveredSubpath != "" {
+		fmt.Fprintln(out, ui.Muted.Render("discovered skill: "+discoveredSubpath))
+	}
+
+	// Compose the effective subpath for provenance: any user-supplied
+	// subpath plus whatever discoverSkillRoot resolved beneath it.
+	effectiveSubpath := joinSubpath(src.Subpath, discoveredSubpath)
+
+	s, err := skill.Load(skillRoot)
 	if err != nil {
 		return &ExitError{Code: 7, Err: fmt.Errorf("install: %w", err)}
 	}
 	scratch := filepath.Join(scratchParent, s.Name)
-	if err := os.Rename(placeholder, scratch); err != nil {
+	if err := os.Rename(skillRoot, scratch); err != nil {
 		return &ExitError{Code: 3, Err: fmt.Errorf("install: renaming scratch dir: %w", err)}
 	}
 	s, err = skill.Load(scratch)
@@ -189,10 +202,12 @@ func runRemoteInstall(cmd *cobra.Command, src *fetch.Source, force, dryRun, noLi
 	}
 	fmt.Fprintln(out, ui.Muted.Render("extracted skill: "+s.Name))
 
-	// Stamp provenance and persist.
+	// Stamp provenance and persist. effectiveSubpath includes any auto-
+	// discovered nested path so a later `kungfu update` re-fetches the
+	// same nested skill rather than the repo root.
 	provSource := fmt.Sprintf("%s/%s/%s", src.Host, src.Owner, src.Repo)
-	if src.Subpath != "" {
-		provSource += "/" + src.Subpath
+	if effectiveSubpath != "" {
+		provSource += "/" + effectiveSubpath
 	}
 	s.Source = provSource
 	s.Ref = src.Ref
@@ -363,6 +378,83 @@ func promptConfirm(cmd *cobra.Command, question string, defaultYes bool) (bool, 
 	default:
 		return defaultYes, nil
 	}
+}
+
+// discoverSkillRoot returns the directory under extractDir that holds the
+// skill's SKILL.md plus the in-extract sub-path it lives at (empty when it
+// is at the root).
+//
+// Resolution order:
+//
+//  1. If extractDir itself has SKILL.md, use it (the common single-skill
+//     repo case, no behavioural change vs. PR 4).
+//  2. Otherwise walk for SKILL.md. If exactly one is found, install that
+//     nested skill — repos like anthropics/skills publish many skills in
+//     one repo; auto-picking when there is no ambiguity makes
+//     `kungfu install user/repo` work for them.
+//  3. If more than one is found, error with a list. The user picks one
+//     with the subpath syntax (`user/repo/<subpath>`); without it we have
+//     no way to know which skill they meant.
+//
+// requestedSubpath is the user-supplied subpath, used only to phrase the
+// "no SKILL.md" error message when the extraction was already scoped.
+func discoverSkillRoot(extractDir, requestedSubpath string) (string, string, error) {
+	if _, err := os.Stat(filepath.Join(extractDir, skill.FileName)); err == nil {
+		return extractDir, "", nil
+	}
+	var matches []string
+	walkErr := filepath.WalkDir(extractDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if d.Name() == skill.FileName {
+			matches = append(matches, filepath.Dir(p))
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return "", "", fmt.Errorf("scanning for SKILL.md: %w", walkErr)
+	}
+	sort.Strings(matches)
+
+	switch len(matches) {
+	case 0:
+		if requestedSubpath != "" {
+			return "", "", fmt.Errorf("subpath %q contains no SKILL.md", requestedSubpath)
+		}
+		return "", "", errors.New("extracted source has no SKILL.md")
+	case 1:
+		rel, err := filepath.Rel(extractDir, matches[0])
+		if err != nil {
+			return "", "", fmt.Errorf("computing subpath: %w", err)
+		}
+		return matches[0], filepath.ToSlash(rel), nil
+	default:
+		rels := make([]string, 0, len(matches))
+		for _, m := range matches {
+			if rel, err := filepath.Rel(extractDir, m); err == nil {
+				rels = append(rels, filepath.ToSlash(rel))
+			}
+		}
+		return "", "", fmt.Errorf(
+			"this repo contains %d skills; specify one with the subpath syntax (user/repo/<subpath>):\n  - %s",
+			len(matches), strings.Join(rels, "\n  - "))
+	}
+}
+
+// joinSubpath stitches a user-supplied subpath together with one resolved
+// by auto-discovery, dropping the empty pieces and normalising separators.
+// The result is always forward-slash-separated so it can go straight into
+// the kungfu_source frontmatter value.
+func joinSubpath(user, discovered string) string {
+	parts := []string{}
+	for _, p := range []string{user, discovered} {
+		p = strings.Trim(filepath.ToSlash(p), "/")
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return strings.Join(parts, "/")
 }
 
 // shortSHA returns the first 7 characters of sha — the canonical "short"
