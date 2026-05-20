@@ -1,0 +1,117 @@
+# goreleaser configuration for kungfu.
+# Smoke-test locally with:
+#
+#     goreleaser release --snapshot --clean --skip=publish
+#
+# A push of a v*.*.* tag drives the same flow under .github/workflows/release.yml.
+version: 2
+
+project_name: kungfu
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: kungfu
+    main: ./cmd/kungfu
+    binary: kungfu
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/mjcurry/kungfu/internal/cli.version={{.Version}}
+      - -X github.com/mjcurry/kungfu/internal/cli.commit={{.ShortCommit}}
+      - -X github.com/mjcurry/kungfu/internal/cli.date={{.Date}}
+
+archives:
+  - id: kungfu
+    name_template: "kungfu_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "kungfu_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))?:'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\(.+\))?:'
+      order: 1
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - '^chore(\(.+\))?:'
+      - '^docs(\(.+\))?:'
+      - '^test(\(.+\))?:'
+      - '^style(\(.+\))?:'
+      - '^refactor(\(.+\))?:'
+      - 'Merge pull request'
+      - 'Merge branch'
+
+# Homebrew tap. Skipped automatically when HOMEBREW_TAP_GITHUB_TOKEN is not
+# set so a release where the tap secret is missing still succeeds.
+brews:
+  - name: kungfu
+    skip_upload: '{{ if eq .Env.HOMEBREW_TAP_GITHUB_TOKEN "" }}true{{ else }}false{{ end }}'
+    repository:
+      owner: mjcurry
+      name: homebrew-kungfu
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/mjcurry/kungfu"
+    description: "The package manager for your agent skills."
+    license: "MIT"
+    install: |
+      bin.install "kungfu"
+    test: |
+      system "#{bin}/kungfu", "version"
+
+release:
+  github:
+    owner: mjcurry
+    name: kungfu
+  draft: false
+  prerelease: auto
+  name_template: "v{{ .Version }}"
+  header: |
+    `kungfu` v{{ .Version }} — the package manager for your agent skills.
+
+    See [README.md](https://github.com/mjcurry/kungfu#readme) for an overview;
+    full command reference in [docs/commands.md](https://github.com/mjcurry/kungfu/blob/main/docs/commands.md).
+
+    ## Install
+
+    ```sh
+    # macOS / Linux via Homebrew (once the tap is configured):
+    brew install mjcurry/kungfu/kungfu
+
+    # macOS / Linux via curl|sh:
+    curl -fsSL https://raw.githubusercontent.com/mjcurry/kungfu/main/install.sh | sh
+    ```
+
+    Or grab a binary below and verify against `kungfu_{{ .Version }}_checksums.txt`.
