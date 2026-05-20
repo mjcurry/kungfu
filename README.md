@@ -22,7 +22,6 @@ agent on your machine: **Claude, Codex, Cursor, and Copilot**. Skills you
 install from GitHub carry provenance so a later `kungfu update` brings them
 back into sync with one command.
 
-## Demo
 
 <p align="center">
   <img src="loading-skills.gif" alt="Tank loading skills into Neo" width="520">
