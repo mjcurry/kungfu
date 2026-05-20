@@ -245,38 +245,70 @@ func TestRemoteInstall_AutoDiscoversNestedSkill(t *testing.T) {
 	}
 }
 
-func TestRemoteInstall_MultipleSkillsRequireDisambiguation(t *testing.T) {
-	// A repo with several SKILL.md files in different subdirectories
-	// (e.g. anthropics/skills) is ambiguous. Auto-discovery refuses to
-	// pick one and exits with a list pointing at the subpath syntax.
+func TestRemoteInstall_CollectionInstallsAllSkills(t *testing.T) {
+	// A repo with multiple SKILL.md files in different subdirectories is
+	// a "skill collection". The default behaviour now installs all of
+	// them across the requested targets so users do not need to enumerate
+	// every nested skill by hand.
 	srv, env := setupRemoteEnv(t)
 	srv.AddRepo("acme", "collection", githubfake.Repo{
 		DefaultBranch: "main",
 		Refs:          map[string]string{"main": "cdeadbeefdeadbeefdeadbeefdeadbeefdeadbee"},
 		Files: map[string]string{
-			"skills/csv/SKILL.md":  "---\nname: csv\ndescription: Use this skill when CSV.\n---\n\nBody.\n",
-			"skills/json/SKILL.md": "---\nname: json\ndescription: Use this skill when JSON.\n---\n\nBody.\n",
-			"skills/yaml/SKILL.md": "---\nname: yaml\ndescription: Use this skill when YAML.\n---\n\nBody.\n",
+			".claude/skills/csv/SKILL.md":  "---\nname: csv\ndescription: Use this skill when CSV.\n---\n\nBody.\n",
+			".claude/skills/json/SKILL.md": "---\nname: json\ndescription: Use this skill when JSON.\n---\n\nBody.\n",
+			".claude/skills/yaml/SKILL.md": "---\nname: yaml\ndescription: Use this skill when YAML.\n---\n\nBody.\n",
 		},
 	})
 
-	_, err := runRoot(t, env, "install", "--yes", "acme/collection")
-	if exitCode(err) != 7 {
-		t.Fatalf("exit %d, want 7; err=%v", exitCode(err), err)
+	out, err := runRoot(t, env, "--target", "claude,codex", "install", "--yes", "acme/collection")
+	if exitCode(err) != 0 {
+		t.Fatalf("exit %d: %v\nout:\n%s", exitCode(err), err, out.String())
 	}
-	if err == nil || !strings.Contains(err.Error(), "this repo contains 3 skills") {
-		t.Errorf("expected disambiguation message naming 3 skills: %v", err)
-	}
-	for _, want := range []string{"skills/csv", "skills/json", "skills/yaml"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error should list %q: %v", want, err)
-		}
-	}
-	// Nothing should have landed in any target.
+	// Each skill should land in each target.
 	for _, name := range []string{"csv", "json", "yaml"} {
-		if _, err := os.Stat(filepath.Join(env.dirs["claude"], name)); err == nil {
-			t.Errorf("%s leaked through to claude despite ambiguous source", name)
+		for _, target := range []string{"claude", "codex"} {
+			path := filepath.Join(env.dirs[target], name, "SKILL.md")
+			if _, err := os.Stat(path); err != nil {
+				t.Errorf("%s missing for %s target: %v", name, target, err)
+			}
 		}
+	}
+	// Provenance for each installed copy should include its specific subpath.
+	for _, name := range []string{"csv", "json", "yaml"} {
+		data, _ := os.ReadFile(filepath.Join(env.dirs["claude"], name, "SKILL.md"))
+		wantSource := "kungfu_source: github.com/acme/collection/.claude/skills/" + name
+		if !strings.Contains(string(data), wantSource) {
+			t.Errorf("%s missing %q in provenance:\n%s", name, wantSource, data)
+		}
+	}
+	// The output should announce how many skills were discovered.
+	if !strings.Contains(out.String(), "found 3 skills") {
+		t.Errorf("expected 'found 3 skills' announcement:\n%s", out.String())
+	}
+}
+
+func TestRemoteInstall_CollectionWithOneBadSkillContinues(t *testing.T) {
+	// If one skill in a collection fails lint, the install should warn
+	// about it and continue with the rest rather than aborting the batch.
+	srv, env := setupRemoteEnv(t)
+	srv.AddRepo("acme", "mixed", githubfake.Repo{
+		DefaultBranch: "main",
+		Refs:          map[string]string{"main": "fdeadbeefdeadbeefdeadbeefdeadbeefdeadbee"},
+		Files: map[string]string{
+			"skills/good/SKILL.md": "---\nname: good\ndescription: Use this skill when good.\n---\n\nBody.\n",
+			// description-missing → lint failure for this skill only.
+			"skills/bad/SKILL.md": "---\nname: bad\n---\n\nBody.\n",
+		},
+	})
+	if _, err := runRoot(t, env, "install", "--yes", "acme/mixed"); exitCode(err) != 0 {
+		t.Fatalf("exit %d: %v", exitCode(err), err)
+	}
+	if _, err := os.Stat(filepath.Join(env.dirs["claude"], "good", "SKILL.md")); err != nil {
+		t.Errorf("good skill should have installed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(env.dirs["claude"], "bad")); err == nil {
+		t.Errorf("lint-failing skill should not have installed")
 	}
 }
 

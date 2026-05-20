@@ -142,11 +142,14 @@ Some repos publish a *collection* of skills — multiple `SKILL.md` files in
 nested directories rather than one at the root. `kungfu install` handles
 this automatically:
 
-- If the repo has exactly one `SKILL.md` (root or nested), it is installed
-  and the subpath is recorded in `kungfu_source` so `kungfu update` works.
-- If the repo has multiple, install errors with the list of skills and
-  asks you to pick one with the subpath form (e.g.
-  `kungfu install user/collection-repo/skills/csv-formatter`).
+- If the repo has one `SKILL.md` (root or nested), it is installed and the
+  subpath is recorded in `kungfu_source` so `kungfu update` works.
+- If the repo has multiple, **all of them are installed** into each of the
+  selected targets. The install prompt lists them up front so you see what
+  is about to happen, and individual lint failures are reported but do not
+  stop the rest of the batch.
+- To install only one skill from a collection, narrow with the subpath
+  syntax, e.g. `kungfu install user/collection-repo/skills/csv-formatter`.
 
 ## Supported agents
 

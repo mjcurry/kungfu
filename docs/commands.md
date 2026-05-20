@@ -159,9 +159,10 @@ Remote installs append provenance frontmatter to the destination so a later
 at `$XDG_CACHE_HOME/kungfu/tarballs/` for 7 days.
 
 When a repo is a *skill collection* (multiple `SKILL.md` files in nested
-directories), install auto-picks the nested skill if exactly one is
-present; it errors with a list and the subpath syntax suggestion when
-there are several.
+directories), install installs every skill it finds. The pre-install
+prompt lists the skills so you see what is about to land. Narrow to a
+single skill with the subpath syntax (`user/repo/<subpath>`); a per-skill
+lint failure is logged and the rest of the batch continues.
 
 Exit codes: 0 success, 1 lint failure or every target unsupported, 2
 destination collision without `--force`, 3 partial / total I/O failure, 5

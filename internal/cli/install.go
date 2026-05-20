@@ -173,57 +173,128 @@ func runRemoteInstall(cmd *cobra.Command, src *fetch.Source, force, dryRun, noLi
 
 	// Some repos are skill *collections* — one repo with multiple
 	// SKILL.md files nested in subdirectories rather than at the root.
-	// discoverSkillRoot handles both shapes: a single root SKILL.md, a
-	// single nested SKILL.md (auto-pick), or multiple (error with a list
-	// telling the user how to pick).
-	skillRoot, discoveredSubpath, err := discoverSkillRoot(placeholder, src.Subpath)
+	// discoverSkillRoots returns every skill it finds; we install all of
+	// them by default. The user can narrow to one via the subpath syntax
+	// (`user/repo/<subpath>`) if they only want a single skill.
+	roots, err := discoverSkillRoots(placeholder, src.Subpath)
 	if err != nil {
 		return &ExitError{Code: 7, Err: fmt.Errorf("install: %w", err)}
 	}
-	if discoveredSubpath != "" {
-		fmt.Fprintln(out, ui.Muted.Render("discovered skill: "+discoveredSubpath))
+	if len(roots) > 1 {
+		fmt.Fprintf(out, "%s found %d skills in this repo:\n",
+			ui.Muted.Render("•"), len(roots))
+		for _, r := range roots {
+			label := r.Subpath
+			if label == "" {
+				label = "<repo root>"
+			}
+			fmt.Fprintf(out, "  - %s\n", label)
+		}
+	} else if roots[0].Subpath != "" {
+		fmt.Fprintln(out, ui.Muted.Render("discovered skill: "+roots[0].Subpath))
 	}
 
-	// Compose the effective subpath for provenance: any user-supplied
-	// subpath plus whatever discoverSkillRoot resolved beneath it.
-	effectiveSubpath := joinSubpath(src.Subpath, discoveredSubpath)
-
-	s, err := skill.Load(skillRoot)
-	if err != nil {
-		return &ExitError{Code: 7, Err: fmt.Errorf("install: %w", err)}
+	prepared, prepErrors := prepareSkillsForInstall(cmd, src, sha, scratchParent, roots, noLint)
+	if len(prepared) == 0 {
+		return &ExitError{Code: 1, Err: fmt.Errorf(
+			"install: no skills passed pre-install lint:\n%s",
+			combineErrors(prepErrors).Error())}
 	}
-	scratch := filepath.Join(scratchParent, s.Name)
-	if err := os.Rename(skillRoot, scratch); err != nil {
-		return &ExitError{Code: 3, Err: fmt.Errorf("install: renaming scratch dir: %w", err)}
-	}
-	s, err = skill.Load(scratch)
-	if err != nil {
-		return &ExitError{Code: 3, Err: fmt.Errorf("install: reload after rename: %w", err)}
-	}
-	fmt.Fprintln(out, ui.Muted.Render("extracted skill: "+s.Name))
-
-	// Stamp provenance and persist. effectiveSubpath includes any auto-
-	// discovered nested path so a later `kungfu update` re-fetches the
-	// same nested skill rather than the repo root.
-	provSource := fmt.Sprintf("%s/%s/%s", src.Host, src.Owner, src.Repo)
-	if effectiveSubpath != "" {
-		provSource += "/" + effectiveSubpath
-	}
-	s.Source = provSource
-	s.Ref = src.Ref
-	s.SHA = sha
-	s.InstalledAt = time.Now().UTC().Format(time.RFC3339)
-	if err := s.Save(); err != nil {
-		return &ExitError{Code: 3, Err: fmt.Errorf("install: stamping provenance: %w", err)}
+	for _, perr := range prepErrors {
+		fmt.Fprintf(cmd.ErrOrStderr(), "%s %s\n", ui.Warning.Render("⚠"), perr.Error())
 	}
 
-	if err := runLintBeforeInstall(cmd, scratch, noLint); err != nil {
-		return err
-	}
-
-	sourceLabel := fmt.Sprintf("%s@%s from %s", s.Name, shortSHA(sha), provSource)
 	confirm := !yes
-	return runInstallPlan(cmd, s, scratch, force, dryRun, confirm, sourceLabel)
+	return runInstallPlanMulti(cmd, prepared, force, dryRun, confirm, src, sha)
+}
+
+// preparedSkill is a skill that has been extracted, stamped with provenance,
+// and lint-cleared, ready to copy into each target Location.
+type preparedSkill struct {
+	skill      *skill.Skill
+	scratchDir string
+	// subpath captures where the skill lived inside the repo, for the
+	// human-facing summary at the head of the install prompt.
+	subpath string
+}
+
+// prepareSkillsForInstall walks every discovered root, renames each one to a
+// per-skill scratch directory (so lint's frontmatter/name-mismatch rule
+// sees a matching basename), stamps provenance into the SKILL.md, and runs
+// the standard rule set. Skills that fail lint are excluded from the
+// returned slice and their errors are surfaced separately so the caller
+// can warn-and-continue rather than aborting the whole batch.
+func prepareSkillsForInstall(
+	cmd *cobra.Command,
+	src *fetch.Source,
+	sha, scratchParent string,
+	roots []discoveredSkill,
+	noLint bool,
+) ([]preparedSkill, []error) {
+	var prepared []preparedSkill
+	var failures []error
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	for _, root := range roots {
+		s, err := skill.Load(root.Dir)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", root.Subpath, err))
+			continue
+		}
+		// Lint's frontmatter/name-mismatch rule compares the basename
+		// against the frontmatter name, so the scratch directory must
+		// match s.Name exactly. If two skills in the same repo share a
+		// name, the rename fails for the second one and we surface that
+		// as a per-skill failure rather than aborting the whole batch.
+		scratch := filepath.Join(scratchParent, s.Name)
+		if err := os.Rename(root.Dir, scratch); err != nil {
+			failures = append(failures, fmt.Errorf("%s (%s): renaming scratch: %w",
+				s.Name, root.Subpath, err))
+			continue
+		}
+		s, err = skill.Load(scratch)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("%s: reload after rename: %w", s.Name, err))
+			continue
+		}
+
+		effectiveSubpath := joinSubpath(src.Subpath, root.Subpath)
+		provSource := fmt.Sprintf("%s/%s/%s", src.Host, src.Owner, src.Repo)
+		if effectiveSubpath != "" {
+			provSource += "/" + effectiveSubpath
+		}
+		s.Source = provSource
+		s.Ref = src.Ref
+		s.SHA = sha
+		s.InstalledAt = now
+		if err := s.Save(); err != nil {
+			failures = append(failures, fmt.Errorf("%s: stamping provenance: %w", s.Name, err))
+			continue
+		}
+
+		if !noLint {
+			rep, lerr := lint.NewDefault().Lint(scratch)
+			if lerr != nil {
+				failures = append(failures, fmt.Errorf("%s: lint: %w", s.Name, lerr))
+				continue
+			}
+			if rep.HasErrors() {
+				renderLintHuman(cmd.ErrOrStderr(), rep)
+				failures = append(failures, fmt.Errorf("%s: pre-install lint errors (skipping)", s.Name))
+				continue
+			}
+			if len(rep.Warnings()) > 0 {
+				renderLintHuman(cmd.OutOrStdout(), rep)
+			}
+		}
+
+		prepared = append(prepared, preparedSkill{
+			skill:      s,
+			scratchDir: scratch,
+			subpath:    effectiveSubpath,
+		})
+	}
+	return prepared, failures
 }
 
 // runLintBeforeInstall runs the standard rule set against srcDir unless
@@ -256,6 +327,144 @@ type installPlan struct {
 	loc  targetpkg.Location
 	dst  string
 	busy bool
+}
+
+// multiPlan is one (skill, target, scope, destination) tuple used by the
+// multi-skill (collection) install flow.
+type multiPlan struct {
+	prepared preparedSkill
+	loc      targetpkg.Location
+	dst      string
+	busy     bool
+}
+
+// runInstallPlanMulti is the multi-skill counterpart to runInstallPlan. It
+// computes the full (skill × target) plan up front so conflicts can be
+// reported atomically and the user sees one master confirmation prompt
+// rather than one per skill.
+func runInstallPlanMulti(
+	cmd *cobra.Command,
+	prepared []preparedSkill,
+	force, dryRun, confirm bool,
+	src *fetch.Source,
+	sha string,
+) error {
+	app, ok := AppFromContext(cmd.Context())
+	if !ok {
+		return &ExitError{Code: 3, Err: errors.New("install: missing application context")}
+	}
+	targets, err := app.Config.ResolveTargets(app.TargetFlag)
+	if err != nil {
+		return &ExitError{Code: 3, Err: err}
+	}
+	scope, err := app.Config.ResolveScope(app.ScopeFlag)
+	if err != nil {
+		return &ExitError{Code: 3, Err: err}
+	}
+	cwd, _ := os.Getwd()
+
+	out := cmd.OutOrStdout()
+	locs, _ := targetpkg.Locations(targets, scope, cwd, func(t targetpkg.Target, reason string) {
+		fmt.Fprintf(out, "%s skipped: %s (%s)\n", ui.Warning.Render("⚠"), t.Name, reason)
+	})
+	if len(locs) == 0 {
+		return &ExitError{Code: 1, Err: errors.New("install: every target was unsupported for the requested scope")}
+	}
+
+	plans := make([]multiPlan, 0, len(prepared)*len(locs))
+	conflicts := make([]string, 0)
+	for _, ps := range prepared {
+		for _, loc := range locs {
+			p := multiPlan{prepared: ps, loc: loc, dst: filepath.Join(loc.Dir, ps.skill.Name)}
+			if _, err := os.Stat(p.dst); err == nil {
+				p.busy = true
+				conflicts = append(conflicts,
+					fmt.Sprintf("  %s → %s (%s): %s", ps.skill.Name, loc.Target.Name, loc.Scope, p.dst))
+			}
+			plans = append(plans, p)
+		}
+	}
+	if len(conflicts) > 0 && !force {
+		msg := "install: destinations already exist:\n" + strings.Join(conflicts, "\n") +
+			"\npass --force to overwrite"
+		return &ExitError{Code: 2, Err: errors.New(msg)}
+	}
+
+	if dryRun {
+		for _, p := range plans {
+			fmt.Fprintf(out, "would install: %s → %s (%s) at %s\n",
+				p.prepared.skill.Name, p.loc.Target.Name, p.loc.Scope, p.dst)
+		}
+		return nil
+	}
+
+	if confirm {
+		targetList := make([]string, 0, len(locs))
+		for _, loc := range locs {
+			targetList = append(targetList, fmt.Sprintf("%s (%s)", loc.Target.Name, loc.Scope))
+		}
+		repoLabel := fmt.Sprintf("%s/%s/%s", src.Host, src.Owner, src.Repo)
+		if src.Subpath != "" {
+			repoLabel += "/" + src.Subpath
+		}
+		fmt.Fprintln(out)
+		if len(prepared) == 1 {
+			ps := prepared[0]
+			fmt.Fprintf(out, "install %s@%s from %s to %s? [Y/n] ",
+				ps.skill.Name, shortSHA(sha), repoLabel, strings.Join(targetList, ", "))
+		} else {
+			fmt.Fprintf(out, "install %d skills from %s@%s to %s:\n",
+				len(prepared), repoLabel, shortSHA(sha), strings.Join(targetList, ", "))
+			for _, ps := range prepared {
+				fmt.Fprintf(out, "  - %s\n", ps.skill.Name)
+			}
+			fmt.Fprint(out, "proceed? [Y/n] ")
+		}
+		yesAns, err := readPromptYes(cmd.InOrStdin(), true)
+		if err != nil {
+			return &ExitError{Code: 1, Err: err}
+		}
+		if !yesAns {
+			fmt.Fprintln(out, ui.Muted.Render("aborted"))
+			return nil
+		}
+	}
+
+	succeededSkills := map[string]struct{}{}
+	totalSucceeded := 0
+	failures := make([]error, 0)
+	for _, p := range plans {
+		if err := skill.Install(p.prepared.scratchDir, p.dst, force); err != nil {
+			failures = append(failures, fmt.Errorf("%s → %s (%s): %w",
+				p.prepared.skill.Name, p.loc.Target.Name, p.loc.Scope, err))
+			fmt.Fprintf(cmd.ErrOrStderr(), "%s install failed for %s → %s (%s): %v\n",
+				ui.Error.Render("✗"), p.prepared.skill.Name,
+				p.loc.Target.Name, p.loc.Scope, err)
+			continue
+		}
+		succeededSkills[p.prepared.skill.Name] = struct{}{}
+		totalSucceeded++
+		fmt.Fprintf(out, "%s installed: %s → %s (%s) at %s\n",
+			ui.Success.Render("✓"), p.prepared.skill.Name,
+			ui.Bold.Render(p.loc.Target.Name), p.loc.Scope, p.dst)
+	}
+
+	var summary string
+	if len(prepared) == 1 {
+		summary = fmt.Sprintf("installed to %d target%s",
+			totalSucceeded, plural(totalSucceeded))
+	} else {
+		summary = fmt.Sprintf("installed %d skill%s across %d target%s (%d copies)",
+			len(succeededSkills), plural(len(succeededSkills)),
+			len(locs), plural(len(locs)), totalSucceeded)
+	}
+	if len(failures) > 0 {
+		summary += fmt.Sprintf(", %d failed", len(failures))
+		fmt.Fprintln(out, ui.Warning.Render(summary))
+		return &ExitError{Code: 3, Err: combineErrors(failures)}
+	}
+	fmt.Fprintln(out, ui.Success.Render(summary))
+	return nil
 }
 
 // runInstallPlan handles everything from target/scope resolution through
@@ -380,66 +589,59 @@ func promptConfirm(cmd *cobra.Command, question string, defaultYes bool) (bool, 
 	}
 }
 
-// discoverSkillRoot returns the directory under extractDir that holds the
-// skill's SKILL.md plus the in-extract sub-path it lives at (empty when it
-// is at the root).
+// discoveredSkill is one SKILL.md found under an extracted source.
+type discoveredSkill struct {
+	// Dir is the absolute directory containing the SKILL.md.
+	Dir string
+	// Subpath is the forward-slash-separated path inside the extract root,
+	// or "" when the skill lives at the root.
+	Subpath string
+}
+
+// discoverSkillRoots locates every SKILL.md under extractDir. Resolution
+// order:
 //
-// Resolution order:
+//  1. If extractDir itself has SKILL.md, return it alone — repos that ship
+//     one skill at the root keep their original install behaviour.
+//  2. Otherwise walk for SKILL.md files. The caller decides whether to
+//     install one (the only one found) or all of them (a collection).
 //
-//  1. If extractDir itself has SKILL.md, use it (the common single-skill
-//     repo case, no behavioural change vs. PR 4).
-//  2. Otherwise walk for SKILL.md. If exactly one is found, install that
-//     nested skill — repos like anthropics/skills publish many skills in
-//     one repo; auto-picking when there is no ambiguity makes
-//     `kungfu install user/repo` work for them.
-//  3. If more than one is found, error with a list. The user picks one
-//     with the subpath syntax (`user/repo/<subpath>`); without it we have
-//     no way to know which skill they meant.
-//
-// requestedSubpath is the user-supplied subpath, used only to phrase the
-// "no SKILL.md" error message when the extraction was already scoped.
-func discoverSkillRoot(extractDir, requestedSubpath string) (string, string, error) {
+// requestedSubpath is the user-supplied subpath; used solely to phrase the
+// "no SKILL.md" error when extraction was already scoped down.
+func discoverSkillRoots(extractDir, requestedSubpath string) ([]discoveredSkill, error) {
 	if _, err := os.Stat(filepath.Join(extractDir, skill.FileName)); err == nil {
-		return extractDir, "", nil
+		return []discoveredSkill{{Dir: extractDir, Subpath: ""}}, nil
 	}
-	var matches []string
+	var matches []discoveredSkill
 	walkErr := filepath.WalkDir(extractDir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
-		if d.Name() == skill.FileName {
-			matches = append(matches, filepath.Dir(p))
+		if d.Name() != skill.FileName {
+			return nil
 		}
+		dir := filepath.Dir(p)
+		rel, relErr := filepath.Rel(extractDir, dir)
+		if relErr != nil {
+			return nil
+		}
+		matches = append(matches, discoveredSkill{
+			Dir:     dir,
+			Subpath: filepath.ToSlash(rel),
+		})
 		return nil
 	})
 	if walkErr != nil {
-		return "", "", fmt.Errorf("scanning for SKILL.md: %w", walkErr)
+		return nil, fmt.Errorf("scanning for SKILL.md: %w", walkErr)
 	}
-	sort.Strings(matches)
-
-	switch len(matches) {
-	case 0:
+	if len(matches) == 0 {
 		if requestedSubpath != "" {
-			return "", "", fmt.Errorf("subpath %q contains no SKILL.md", requestedSubpath)
+			return nil, fmt.Errorf("subpath %q contains no SKILL.md", requestedSubpath)
 		}
-		return "", "", errors.New("extracted source has no SKILL.md")
-	case 1:
-		rel, err := filepath.Rel(extractDir, matches[0])
-		if err != nil {
-			return "", "", fmt.Errorf("computing subpath: %w", err)
-		}
-		return matches[0], filepath.ToSlash(rel), nil
-	default:
-		rels := make([]string, 0, len(matches))
-		for _, m := range matches {
-			if rel, err := filepath.Rel(extractDir, m); err == nil {
-				rels = append(rels, filepath.ToSlash(rel))
-			}
-		}
-		return "", "", fmt.Errorf(
-			"this repo contains %d skills; specify one with the subpath syntax (user/repo/<subpath>):\n  - %s",
-			len(matches), strings.Join(rels, "\n  - "))
+		return nil, errors.New("extracted source has no SKILL.md")
 	}
+	sort.Slice(matches, func(i, j int) bool { return matches[i].Subpath < matches[j].Subpath })
+	return matches, nil
 }
 
 // joinSubpath stitches a user-supplied subpath together with one resolved
