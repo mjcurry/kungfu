@@ -155,11 +155,15 @@ func TestResolveSkillsDirExpandsTilde(t *testing.T) {
 	t.Setenv(EnvSkillsDir, "")
 	cfg := &Config{SkillsDir: "~/skills"}
 	want := filepath.Join(home, "skills")
-	if got := cfg.ResolveSkillsDir(""); got != want {
+	got := cfg.ResolveSkillsDir("")
+	if got != want {
 		t.Errorf("ResolveSkillsDir() = %q, want %q", got, want)
 	}
-	if strings.Contains(cfg.ResolveSkillsDir(""), "~") {
-		t.Errorf("tilde was not expanded")
+	// Verify the *leading* tilde is gone. A bare strings.Contains check is
+	// wrong on Windows runners, whose tempdirs contain 8.3 short-name
+	// segments like RUNNER~1.
+	if strings.HasPrefix(got, "~") {
+		t.Errorf("leading tilde not expanded: %q", got)
 	}
 }
 
