@@ -86,6 +86,10 @@ func NewRootCmd() *cobra.Command {
 
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newLintCmd())
+	root.AddCommand(newListCmd())
+	root.AddCommand(newInstallCmd())
+	root.AddCommand(newRemoveCmd())
+	root.AddCommand(newShowCmd())
 	return root
 }
 

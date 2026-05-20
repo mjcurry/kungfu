@@ -30,15 +30,23 @@ var (
 	Bold lipgloss.Style
 )
 
+// noColor mirrors the most recent SetNoColor call so renderers can choose
+// alternate glyphs (e.g. "[!]" vs "⚠") when ANSI styling is unavailable.
+var noColor bool
+
+// NoColor reports whether color output is currently disabled.
+func NoColor() bool { return noColor }
+
 func init() {
-	_, noColor := os.LookupEnv("NO_COLOR")
-	SetNoColor(noColor)
+	_, nc := os.LookupEnv("NO_COLOR")
+	SetNoColor(nc)
 }
 
 // SetNoColor rebuilds the shared styles. When disabled is true the styles
 // carry no ANSI color, leaving plain (but still structurally styled, e.g.
 // bold) output suitable for pipes, logs, and NO_COLOR environments.
 func SetNoColor(disabled bool) {
+	noColor = disabled
 	if disabled {
 		Error = lipgloss.NewStyle().Bold(true)
 		Warning = lipgloss.NewStyle()
