@@ -33,14 +33,16 @@ func setupMultiTargetEnv(t *testing.T) *multiTargetEnv {
 			t.Fatal(err)
 		}
 	}
+	// Use TOML literal strings (single-quoted) for paths so backslashes
+	// in Windows tempdir paths are not interpreted as escape sequences.
 	cfg := "default_targets = [\"claude\"]\ndefault_scope = \"personal\"\n\n"
 	for _, name := range []string{"claude", "codex", "copilot"} {
 		cfg += "[targets." + name + "]\n"
-		cfg += "personal_dir = \"" + env.dirs[name] + "\"\n\n"
+		cfg += "personal_dir = '" + env.dirs[name] + "'\n\n"
 	}
 	// Leave cursor's personal_dir unset so the cursor-personal skip path
 	// remains testable end-to-end.
-	cfg += "[targets.cursor]\nproject_dir = \".cursor/skills\"\n"
+	cfg += "[targets.cursor]\nproject_dir = '.cursor/skills'\n"
 
 	env.configPath = filepath.Join(root, "config.toml")
 	if err := os.WriteFile(env.configPath, []byte(cfg), 0o644); err != nil {

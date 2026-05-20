@@ -2,6 +2,7 @@ package target
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -39,8 +40,13 @@ func TestLocations_Project(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("got %d, want 2", len(got))
 	}
-	if got[0].Dir != "/repo/.claude/skills" || got[1].Dir != "/repo/.cursor/skills" {
-		t.Errorf("dirs = %s, %s", got[0].Dir, got[1].Dir)
+	// filepath.Join uses backslashes on Windows; build expectations the
+	// same way the implementation does.
+	wantClaude := filepath.Join("/repo", ".claude/skills")
+	wantCursor := filepath.Join("/repo", ".cursor/skills")
+	if got[0].Dir != wantClaude || got[1].Dir != wantCursor {
+		t.Errorf("dirs = %q, %q; want %q, %q",
+			got[0].Dir, got[1].Dir, wantClaude, wantCursor)
 	}
 }
 

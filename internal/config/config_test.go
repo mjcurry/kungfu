@@ -3,11 +3,23 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/mjcurry/kungfu/internal/target"
 )
+
+// setHomeForTest sets the env var that os.UserHomeDir consults on the
+// current platform. On Linux/macOS that's HOME; on Windows it's USERPROFILE.
+// Tests that only set HOME pass on Unix but silently no-op on Windows.
+func setHomeForTest(t *testing.T, home string) {
+	t.Helper()
+	t.Setenv("HOME", home)
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", home)
+	}
+}
 
 func writeConfig(t *testing.T, xdg, body string) {
 	t.Helper()
@@ -32,7 +44,7 @@ func TestPathUsesXDG(t *testing.T) {
 func TestPathFallsBackToHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", "")
-	t.Setenv("HOME", home)
+	setHomeForTest(t, home)
 	want := filepath.Join(home, ".config", "kungfu", "config.toml")
 	if got := Path(); got != want {
 		t.Errorf("Path() = %q, want %q", got, want)
@@ -108,7 +120,7 @@ func TestResolveSkillsDirPrecedence(t *testing.T) {
 		t.Setenv(EnvSkillsDir, "")
 		empty := &Config{}
 		home := t.TempDir()
-		t.Setenv("HOME", home)
+		setHomeForTest(t, home)
 		want := filepath.Join(home, ".claude", "skills")
 		if got := empty.ResolveSkillsDir(""); got != want {
 			t.Errorf("got %q, want %q", got, want)
@@ -118,7 +130,7 @@ func TestResolveSkillsDirPrecedence(t *testing.T) {
 
 func TestExpandPath(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHomeForTest(t, home)
 
 	tests := []struct {
 		in   string
@@ -139,7 +151,7 @@ func TestExpandPath(t *testing.T) {
 
 func TestResolveSkillsDirExpandsTilde(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHomeForTest(t, home)
 	t.Setenv(EnvSkillsDir, "")
 	cfg := &Config{SkillsDir: "~/skills"}
 	want := filepath.Join(home, "skills")
@@ -155,7 +167,7 @@ func TestResolveSkillsDirExpandsTilde(t *testing.T) {
 
 func TestLoadMissingTargetsSectionUsesBuiltins(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHomeForTest(t, home)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	cfg, err := Load()
@@ -191,7 +203,7 @@ func TestLoadMissingTargetsSectionUsesBuiltins(t *testing.T) {
 func TestLoadPartialTargetOverride(t *testing.T) {
 	xdg := t.TempDir()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHomeForTest(t, home)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 
 	writeConfig(t, xdg, `
@@ -224,7 +236,7 @@ personal_dir = "/srv/claude"
 func TestLoadCustomTargetAdded(t *testing.T) {
 	xdg := t.TempDir()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHomeForTest(t, home)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 
 	writeConfig(t, xdg, `

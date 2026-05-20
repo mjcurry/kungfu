@@ -1,6 +1,7 @@
 package target
 
 import (
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -107,8 +108,11 @@ func TestDir(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got != "/repo/.claude/skills" {
-			t.Errorf("got %q", got)
+		// filepath.Join uses backslashes on Windows, so build the expectation
+		// the same way the implementation does rather than hard-coding "/".
+		want := filepath.Join("/repo", ".claude/skills")
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
 		}
 	})
 

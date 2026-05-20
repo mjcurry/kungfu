@@ -86,11 +86,13 @@ func TestE2E_MultiTargetLifecycle(t *testing.T) {
 		}
 	}
 	cfgPath := filepath.Join(root, "config.toml")
+	// TOML literal strings (single quotes) for paths: avoids backslash
+	// escape interpretation on Windows where tempdirs are C:\Users\...
 	cfg := "default_targets = [\"claude\"]\ndefault_scope = \"personal\"\n\n"
 	for _, name := range []string{"claude", "codex", "copilot"} {
-		cfg += "[targets." + name + "]\npersonal_dir = \"" + dirs[name] + "\"\n\n"
+		cfg += "[targets." + name + "]\npersonal_dir = '" + dirs[name] + "'\n\n"
 	}
-	cfg += "[targets.cursor]\nproject_dir = \".cursor/skills\"\n"
+	cfg += "[targets.cursor]\nproject_dir = '.cursor/skills'\n"
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
