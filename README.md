@@ -19,7 +19,7 @@
 — `SKILL.md` directories that teach AI agents a new capability via the
 progressive-disclosure pattern. One CLI manages the same skill across every
 agent on your machine: **Claude, Codex, Cursor, and Copilot**. Skills you
-install from GitHub carry provenance so a later `kungfu update` brings them
+install from GitHub carry version provenance so a later `kungfu update` brings them
 back into sync with one command.
 
 
