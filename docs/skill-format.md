@@ -37,6 +37,25 @@ Unrecognized fields are permitted and preserved: `kungfu` round-trips a skill
 without discarding frontmatter it does not model, so you can add your own
 metadata safely.
 
+### Provenance fields (set by `kungfu install <github-source>`)
+
+When you install a skill from a remote source, `kungfu install` appends
+four fields to the destination's frontmatter so `kungfu update` can later
+re-fetch it. Skills you scaffold with `kungfu new` or install locally do
+not have these fields.
+
+| Field                 | Type   | Description                                                                                  |
+| --------------------- | ------ | -------------------------------------------------------------------------------------------- |
+| `kungfu_source`       | string | Canonical source path, e.g. `github.com/user/repo` or `github.com/user/repo/subpath`.        |
+| `kungfu_ref`          | string | The user-supplied ref the skill was installed at (`v1.0.0`, `main`, a short SHA, …).         |
+| `kungfu_sha`          | string | The 40-character commit SHA the install was pinned to.                                       |
+| `kungfu_installed_at` | string | RFC 3339 timestamp recording when the install happened (UTC).                                |
+
+`kungfu` writes these with quoted YAML strings; if you ever hand-edit them,
+keep the values strings (no bare timestamps, no unquoted 40-digit numbers).
+The `kungfu_` prefix is reserved — other tools should pick a different
+namespace so the two can coexist.
+
 ## Complete example
 
 ```markdown

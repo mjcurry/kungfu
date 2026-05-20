@@ -1,217 +1,178 @@
 <p align="center">
-  <img src="kungfu-logo.png" alt="kungfu" width="220">
+  <img src="loading-skills.gif" alt="Tank loading skills into Neo" width="520">
 </p>
 
-# kungfu
-
-> "I know kung fu." — the package manager for your agent skills. **One CLI, every agent.**
-
-`kungfu` installs, lints, and manages [Agent Skills](https://agentskills.io)
-— `SKILL.md` directories that teach AI agents a new capability via the
-progressive-disclosure pattern. With one command, ship the same skill to
-every agent on your machine — from **a local directory** *or* **a GitHub
-repo**:
-
-```sh
-# From a local path:
-kungfu install ./my-skill --target claude,codex,cursor,copilot
-
-# From a public GitHub repo (the same flags apply):
-kungfu install https://github.com/nextlevelbuilder/ui-ux-pro-max-skill \
-    --target claude,codex,cursor,copilot
-```
-
-Or scaffold your own:
-
-```sh
-kungfu new my-skill                # interactive
-kungfu new --yes --template data my-skill --description "..."
-```
+<h1 align="center">kungfu</h1>
 
 <p align="center">
-  <img src="loading-skills.gif" alt="Loading skills" width="480">
+  <i>The package manager for your agent skills. One CLI, every agent.</i>
 </p>
 
-## Supported targets
+<p align="center">
+  <a href="https://github.com/mjcurry/kungfu/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/mjcurry/kungfu/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/mjcurry/kungfu/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/mjcurry/kungfu?display_name=tag&sort=semver"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/mjcurry/kungfu"></a>
+  <a href="go.mod"><img alt="Go" src="https://img.shields.io/github/go-mod/go-version/mjcurry/kungfu"></a>
+</p>
 
-| Target  | Personal dir         | Project dir       |
-| ------- | -------------------- | ----------------- |
-| claude  | `~/.claude/skills`   | `.claude/skills`  |
-| codex   | `~/.codex/skills`    | `.codex/skills`   |
-| cursor  | *(none — project only)* | `.cursor/skills`  |
-| copilot | `~/.copilot/skills`  | `.github/skills`  |
+`kungfu` installs, lints, scaffolds, and updates [Agent Skills](https://agentskills.io)
+— `SKILL.md` directories that teach AI agents a new capability via the
+progressive-disclosure pattern. One CLI manages the same skill across every
+agent on your machine: **Claude, Codex, Cursor, and Copilot**. Skills you
+install from GitHub carry provenance so a later `kungfu update` brings them
+back into sync with one command.
 
-Custom targets and per-target overrides are configurable; see
-[Configuration](#configuration).
+## Demo
+
+<!-- TODO: record an asciinema cast of new → lint → install → list → update
+     and embed it here. See docs/release.md for the recording convention. -->
+
+> ⏱ A ~30-second demo cast is planned for v1.0; until it lands, the
+> [Quickstart](#quickstart) section walks through the same flow with copy-pastable
+> commands.
+
+## Install
+
+### Homebrew (macOS, Linux)
+
+```sh
+brew install mjcurry/kungfu/kungfu
+```
+
+### curl | sh (macOS, Linux)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mjcurry/kungfu/main/install.sh | sh
+```
+
+The script detects your OS / arch, downloads the matching archive from the
+[latest release](https://github.com/mjcurry/kungfu/releases/latest), verifies
+its sha256 checksum, and drops the binary into `/usr/local/bin` (or
+`$HOME/.local/bin` if `/usr/local/bin` is read-only).
+
+### go install
+
+```sh
+go install github.com/mjcurry/kungfu/cmd/kungfu@latest
+```
+
+### Manual download
+
+Grab a `kungfu_<version>_<os>_<arch>.tar.gz` (or `.zip` on Windows) from the
+[releases page](https://github.com/mjcurry/kungfu/releases), verify against
+the matching `kungfu_<version>_checksums.txt`:
+
+```sh
+shasum -a 256 -c kungfu_<version>_checksums.txt
+```
+
+then move `kungfu` somewhere on your PATH.
+
+## Quickstart
+
+```sh
+# 1. Scaffold a new skill from a built-in template, lint-clean by construction:
+kungfu new csv-formatter
+kungfu lint csv-formatter
+
+# 2. Or fetch one from GitHub:
+kungfu install https://github.com/nextlevelbuilder/ui-ux-pro-max-skill \
+    --target claude,codex,cursor,copilot
+
+# 3. See what's installed where:
+kungfu list
+
+# 4. Read a skill the way an agent would:
+kungfu show ui-ux-pro-max-skill
+
+# 5. Bring everything tracking a moving ref up to date:
+kungfu update --all
+```
+
+## Supported agents
+
+| Agent     | Personal scope                  | Project scope        | Status |
+| --------- | ------------------------------- | -------------------- | ------ |
+| Claude    | `~/.claude/skills`              | `.claude/skills`     | ✅      |
+| Codex     | `~/.codex/skills`               | `.codex/skills`      | ✅      |
+| Cursor    | *(none — project scope only)*   | `.cursor/skills`     | ✅      |
+| Copilot   | `~/.copilot/skills`             | `.github/skills`     | ✅      |
+
+The format every agent reads is described in [docs/skill-format.md](docs/skill-format.md).
 
 ## Commands
 
-```
-kungfu new     <name>   [--template ...]      # scaffold a new skill from a built-in template
-kungfu install <source> [--target ...]        # install (local path or GitHub: user/repo[@ref][/sub])
-kungfu list                                   # list installed skills (every target)
-kungfu show    <name>   [--target ...]        # print a skill (markdown-rendered)
-kungfu remove  <name>   [--target ...]        # remove from matching targets
-kungfu lint    <path>                         # validate against the rule set
-kungfu version                                # print build info
-```
+| Command            | What it does                                                       |
+| ------------------ | ------------------------------------------------------------------ |
+| `kungfu new`       | Scaffold a new skill from a built-in template (lint-clean).        |
+| `kungfu lint`      | Validate a skill against the rule set (stable, grep-able IDs).     |
+| `kungfu install`   | Install from a local path or a GitHub source.                      |
+| `kungfu list`      | List installed skills across configured targets.                   |
+| `kungfu show`      | Print a skill's metadata + body (markdown-rendered).               |
+| `kungfu remove`    | Remove a skill from one or more targets.                           |
+| `kungfu update`    | Re-fetch a previously-installed skill using its stored provenance. |
+| `kungfu version`   | Print build info (also `--json`).                                  |
 
-Run `kungfu <command> --help` for the full flag listing.
+Full flag listing, exit codes, and examples in [docs/commands.md](docs/commands.md).
 
-## Quick start
+## How it works
 
-```sh
-make build                                                          # → ./bin/kungfu
+`SKILL.md` is an [open, cross-agent format](https://agentskills.io). Every
+supported agent agrees on the directory shape — frontmatter on top,
+progressive-disclosure markdown below, optional `scripts/`, `references/`,
+`assets/` subdirectories. `kungfu` is disciplined file management over that
+format, not agent-specific magic.
 
-# Make your own skill from a built-in template:
-./bin/kungfu new my-skill                                           # interactive
-./bin/kungfu lint my-skill                                          # scaffolds are guaranteed lint-clean
-
-# Install one you already have on disk:
-./bin/kungfu install ./my-skill --target all                        # → claude + codex + cursor + copilot
-
-# Install one from GitHub:
-./bin/kungfu install https://github.com/nextlevelbuilder/ui-ux-pro-max-skill
-
-./bin/kungfu list                                                   # see what's installed where
-./bin/kungfu show my-skill --target claude                          # disambiguate with --target
-```
-
-## Installing skills
-
-`kungfu install <source>` accepts **either a local directory or a GitHub
-source**; the same `--target`, `--scope`, `--force`, and `--dry-run` flags
-apply to both.
-
-### From a local path
-
-A local directory is anything that contains a `SKILL.md`. Paths can be
-relative or absolute:
-
-```sh
-kungfu install ./my-skill                                  # relative
-kungfu install /Users/mike/work/skills/csv-formatter       # absolute
-kungfu install ./my-skill --target claude,codex --force    # overwrite existing installs
-```
-
-Local installs **do not** write provenance frontmatter — the source is on
-your machine, not pinned to a commit.
-
-### From GitHub
-
-A GitHub source may be written several ways; pick whichever you have
-handy (browser URL, `user/repo` shortcut, etc.):
-
-| Source                                                                                | Meaning                                            |
-| ------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `nextlevelbuilder/ui-ux-pro-max-skill`                                                | default branch                                     |
-| `nextlevelbuilder/ui-ux-pro-max-skill@v1.0.0`                                         | tag (or branch / short SHA / full SHA)             |
-| `nextlevelbuilder/ui-ux-pro-max-skill/path/to/skill`                                  | subdirectory inside the repo                       |
-| `nextlevelbuilder/ui-ux-pro-max-skill/path/to/skill@v1.0.0`                           | subdirectory at a specific ref                     |
-| `github.com/nextlevelbuilder/ui-ux-pro-max-skill[…]`                                  | same forms with an explicit host                   |
-| `https://github.com/nextlevelbuilder/ui-ux-pro-max-skill[…]`                          | a pasted browser URL                               |
-
-Example:
-
-```sh
-kungfu install https://github.com/nextlevelbuilder/ui-ux-pro-max-skill \
-    --target claude,codex,cursor,copilot
-```
-
-Each remote install stamps the destination's frontmatter with provenance
-so you can tell at a glance where an installed skill came from:
+When you `kungfu install user/repo`, the skill is fetched from GitHub
+(tarball, checksum-verified, cached at `$XDG_CACHE_HOME/kungfu/tarballs/`),
+linted before it is allowed near your skills directories, then atomically
+copied into each configured target via a `.tmp-<random>` → rename → cleanup
+sequence that survives interruption. Four provenance fields are appended to
+the installed `SKILL.md`:
 
 ```yaml
-kungfu_source: github.com/nextlevelbuilder/ui-ux-pro-max-skill
+kungfu_source: github.com/user/repo
 kungfu_ref: v1.0.0
-kungfu_sha: a1b2c3d4e5f6…           # 40-char commit SHA
+kungfu_sha: a1b2c3d4e5f6…
 kungfu_installed_at: 2026-05-19T03:04:05Z
 ```
 
-Tarballs are cached at `$XDG_CACHE_HOME/kungfu/tarballs/` for 7 days. Use
-`--no-cache` to bypass, `--ref` to set the ref via flag, and `--yes` to skip
-the pre-install confirmation.
+`kungfu update` reads those back, re-resolves the ref, and re-installs when
+the SHA has moved. Skills you created with `kungfu new` or installed locally
+have no provenance and are skipped — they're not on a remote leash.
 
-## Scaffolding new skills
+## Roadmap
 
-`kungfu new` walks you through creating a skill that will pass `kungfu lint`
-cleanly on first run. Four built-in templates ship today:
+Beyond v1:
 
-| Template      | Use it for…                                                   |
-| ------------- | ------------------------------------------------------------- |
-| `basic`       | a minimal SKILL.md with placeholders.                         |
-| `document`    | producing structured prose documents (reports, memos, etc.).  |
-| `data`        | inspecting tabular data; ships a stdlib-Python helper script. |
-| `api-wrapper` | calling an HTTP API behind an env-driven `curl` wrapper.      |
+- **More hosts.** GitLab, Bitbucket, Codeberg, and self-hosted Git via an
+  http URL grammar.
+- **`kungfu publish`** that pushes a skill to a tap-style index.
+- **`kungfu search`** against a public skill directory.
+- **`kungfu test`** that runs a skill's bundled `scripts/test.sh` (or
+  language-detected runner) so reviewers don't have to.
+- **`kungfu doctor`** that diagnoses common misconfigurations (missing
+  targets, stale caches, broken paths).
+- **`kungfu cache`** subcommands (`list`, `clear`, `verify`).
+- **Recorded demo** under `docs/demo.cast`.
 
-Interactive use prompts for template and description; pass `--yes
---template … --description …` to drive it from CI.
+## Contributing
 
-## Configuration
+Issues and pull requests are welcome. Run the full check suite before
+opening a PR:
 
-`kungfu` reads `$XDG_CONFIG_HOME/kungfu/config.toml`, falling back to
-`~/.config/kungfu/config.toml`. The file is optional — defaults apply when
-it is absent.
-
-```toml
-default_targets = ["claude"]
-default_scope   = "personal"        # "personal" | "project"
-
-[targets.claude]
-personal_dir = "~/.claude/skills"
-project_dir  = ".claude/skills"
-
-[targets.codex]
-personal_dir = "~/.codex/skills"
-project_dir  = ".codex/skills"
-
-[targets.cursor]
-personal_dir = ""                   # cursor has no personal scope
-project_dir  = ".cursor/skills"
-
-[targets.copilot]
-personal_dir = "~/.copilot/skills"
-project_dir  = ".github/skills"
+```sh
+make test     # go test ./...
+make lint     # go vet + gofmt -l
+make build    # ./bin/kungfu
 ```
 
-Each `[targets.<name>]` section is a partial override of the built-in
-defaults — only set the fields you want to change. Adding a new
-`[targets.<name>]` section registers a custom target.
+Releases are tag-driven via goreleaser; see [docs/release.md](docs/release.md).
 
-Resolution order for the active target list: `--target` flag →
-`default_targets` from config → `["claude"]`. For scope:
-`--scope` flag → `default_scope` from config → `"personal"`.
+## License
 
-## Lint
-
-`kungfu lint` runs a set of rules with stable, grep-able IDs. Errors block
-install; warnings are advisory unless `--strict` is passed.
-
-| Category      | Rule IDs                                                                                                                                                  |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `frontmatter` | `missing`, `malformed`, `name-missing`, `name-mismatch`, `name-format`, `description-missing`, `description-too-long`, `allowed-tools-type`               |
-| `description` | `no-trigger-phrase`, `vague`                                                                                                                              |
-| `body`        | `empty`                                                                                                                                                   |
-| `references`  | `broken`                                                                                                                                                  |
-| `filenames`   | `non-ascii`                                                                                                                                               |
-
-Exit codes: `0` clean (or warnings without `--strict`), `1` errors, `2`
-warnings under `--strict`, `3` I/O failure. `--json` emits machine-readable
-output; `--fix` trims trailing whitespace and re-serializes the frontmatter.
+[MIT](LICENSE) © Mike Curry.
 
 <p align="center">
   <img src="i-know-kungfu.gif" alt="I know kung fu" width="320">
 </p>
-
-## Documentation
-
-- [The SKILL.md format](docs/skill-format.md) — required and optional fields,
-  directory layout, and a complete example.
-
-## Author
-
-[Mike Curry](https://github.com/mjcurry)
-
-## License
-
-[MIT](LICENSE)
