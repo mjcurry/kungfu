@@ -2,6 +2,7 @@ package cli
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
@@ -236,6 +237,126 @@ func TestEnsureWritable(t *testing.T) {
 		if err := ensureWritable(target); err == nil {
 			t.Errorf("read-only dir should error")
 		}
+	}
+}
+
+// buildReleaseZip returns the bytes of a goreleaser-shaped Windows
+// release archive: <binaryName> + LICENSE + README.md at the root, no
+// top-level directory prefix.
+func buildReleaseZip(t *testing.T, binaryName string, binaryContent []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	write := func(name string, body []byte) {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(binaryName, binaryContent)
+	write("LICENSE", []byte("MIT\n"))
+	write("README.md", []byte("# kungfu\n"))
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestReleaseArchiveName(t *testing.T) {
+	// Sanity check that the OS branch picks .zip for Windows and .tar.gz
+	// for everything else. We can only assert one branch on a given CI
+	// runner, so check the in-process value matches expectations.
+	got := releaseArchiveName("0.1.5")
+	wantExt := ".tar.gz"
+	if runtime.GOOS == "windows" {
+		wantExt = ".zip"
+	}
+	if !strings.HasSuffix(got, wantExt) {
+		t.Errorf("releaseArchiveName = %q, want suffix %q on %s",
+			got, wantExt, runtime.GOOS)
+	}
+	if !strings.Contains(got, runtime.GOARCH) {
+		t.Errorf("releaseArchiveName = %q, want it to mention arch %q",
+			got, runtime.GOARCH)
+	}
+}
+
+func TestReleaseBinaryName(t *testing.T) {
+	want := "kungfu"
+	if runtime.GOOS == "windows" {
+		want = "kungfu.exe"
+	}
+	if got := releaseBinaryName(); got != want {
+		t.Errorf("releaseBinaryName = %q, want %q", got, want)
+	}
+}
+
+func TestExtractBinaryFromZip(t *testing.T) {
+	// Windows release archives are .zip; the extractor must read them.
+	z := buildReleaseZip(t, "kungfu.exe", []byte("WIN_BINARY"))
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "kungfu_0.1.5_windows_amd64.zip")
+	if err := os.WriteFile(archive, z, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "extracted")
+	if err := extractBinaryFromZip(archive, "kungfu.exe", out); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "WIN_BINARY" {
+		t.Errorf("extracted bytes = %q, want WIN_BINARY", got)
+	}
+}
+
+func TestExtractBinaryFromZip_MissingBinary(t *testing.T) {
+	z := buildReleaseZip(t, "kungfu.exe", []byte("x"))
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "a.zip")
+	if err := os.WriteFile(archive, z, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := extractBinaryFromZip(archive, "other-name.exe", filepath.Join(dir, "out")); err == nil {
+		t.Fatal("expected error when the named binary is absent from the zip")
+	}
+}
+
+func TestExtractBinaryFromArchive_DispatchesByExtension(t *testing.T) {
+	dir := t.TempDir()
+	tarball := buildReleaseTarball(t, "kungfu", []byte("UNIX"))
+	if err := os.WriteFile(filepath.Join(dir, "u.tar.gz"), tarball, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	zipBytes := buildReleaseZip(t, "kungfu.exe", []byte("WIN"))
+	if err := os.WriteFile(filepath.Join(dir, "w.zip"), zipBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Tar dispatch.
+	out1 := filepath.Join(dir, "out1")
+	if err := extractBinaryFromArchive(filepath.Join(dir, "u.tar.gz"), "kungfu", out1); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(out1); string(b) != "UNIX" {
+		t.Errorf("tar dispatch wrote %q", b)
+	}
+	// Zip dispatch.
+	out2 := filepath.Join(dir, "out2")
+	if err := extractBinaryFromArchive(filepath.Join(dir, "w.zip"), "kungfu.exe", out2); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(out2); string(b) != "WIN" {
+		t.Errorf("zip dispatch wrote %q", b)
+	}
+	// Unknown extension errors.
+	if err := extractBinaryFromArchive(filepath.Join(dir, "u.tar.gz.weird"),
+		"kungfu", filepath.Join(dir, "out3")); err == nil {
+		t.Errorf("expected error for unknown archive extension")
 	}
 }
 

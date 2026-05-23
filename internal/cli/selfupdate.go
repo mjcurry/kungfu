@@ -2,6 +2,7 @@ package cli
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
@@ -127,7 +128,7 @@ func runSelfUpdate(cmd *cobra.Command, check bool, versionFlag string, yes bool)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	archiveName := fmt.Sprintf("kungfu_%s_%s_%s.tar.gz", tgtNorm, runtime.GOOS, runtime.GOARCH)
+	archiveName := releaseArchiveName(tgtNorm)
 	checksumName := fmt.Sprintf("kungfu_%s_checksums.txt", tgtNorm)
 	base := releaseBaseURL() + "/" + target
 
@@ -146,9 +147,13 @@ func runSelfUpdate(cmd *cobra.Command, check bool, versionFlag string, yes bool)
 		return &ExitError{Code: 3, Err: fmt.Errorf("self-update: %w", err)}
 	}
 
-	newBinaryName := filepath.Base(binPath)
+	// The archive's binary name is "kungfu" on Unix and "kungfu.exe" on
+	// Windows regardless of what the running process is called — the
+	// caller's filepath.Base(binPath) is wrong for dev builds run via
+	// `go run` which resolve to a cache path like /tmp/go-build/.../exe.
+	newBinaryName := releaseBinaryName()
 	newBinaryPath := filepath.Join(tmpDir, "new-"+newBinaryName)
-	if err := extractBinaryFromTarball(archivePath, newBinaryName, newBinaryPath); err != nil {
+	if err := extractBinaryFromArchive(archivePath, newBinaryName, newBinaryPath); err != nil {
 		return &ExitError{Code: 3, Err: fmt.Errorf("self-update: %w", err)}
 	}
 	if err := os.Chmod(newBinaryPath, 0o755); err != nil {
@@ -324,6 +329,80 @@ func readChecksumFor(name, checksumPath string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("checksum for %s not found in %s", name, filepath.Base(checksumPath))
+}
+
+// releaseArchiveName returns the goreleaser archive filename for the
+// current OS/arch. Windows ships .zip; everything else ships .tar.gz.
+// Pass the version without the leading "v" (e.g. "0.1.5").
+func releaseArchiveName(version string) string {
+	ext := "tar.gz"
+	if runtime.GOOS == "windows" {
+		ext = "zip"
+	}
+	return fmt.Sprintf("kungfu_%s_%s_%s.%s", version, runtime.GOOS, runtime.GOARCH, ext)
+}
+
+// releaseBinaryName returns the basename of the kungfu binary inside the
+// release archive: "kungfu.exe" on Windows, "kungfu" elsewhere. This is
+// the canonical archive contents, not the running process's basename —
+// the running process may be a dev build with a different name (e.g.
+// `go run` writes a temp binary under the Go cache with no .exe suffix
+// on Windows).
+func releaseBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "kungfu.exe"
+	}
+	return "kungfu"
+}
+
+// extractBinaryFromArchive dispatches to the right archive reader based
+// on archivePath's suffix. .tar.gz uses the tar reader; .zip uses
+// archive/zip. Unknown suffixes return an error.
+func extractBinaryFromArchive(archivePath, binaryName, destPath string) error {
+	switch {
+	case strings.HasSuffix(archivePath, ".tar.gz") || strings.HasSuffix(archivePath, ".tgz"):
+		return extractBinaryFromTarball(archivePath, binaryName, destPath)
+	case strings.HasSuffix(archivePath, ".zip"):
+		return extractBinaryFromZip(archivePath, binaryName, destPath)
+	default:
+		return fmt.Errorf("unsupported archive type: %s", filepath.Base(archivePath))
+	}
+}
+
+// extractBinaryFromZip pulls the named binary out of a goreleaser .zip
+// release archive (Windows). Same shape as the tarball variant: binary
+// plus LICENSE / README.md at the root.
+func extractBinaryFromZip(archivePath, binaryName, destPath string) error {
+	zr, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return fmt.Errorf("opening zip: %w", err)
+	}
+	defer zr.Close()
+	for _, f := range zr.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+		if filepath.Base(f.Name) != binaryName {
+			continue
+		}
+		src, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("opening %s in zip: %w", f.Name, err)
+		}
+		out, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+		if err != nil {
+			_ = src.Close()
+			return err
+		}
+		if _, err := io.Copy(out, src); err != nil {
+			_ = out.Close()
+			_ = src.Close()
+			return err
+		}
+		_ = src.Close()
+		return out.Close()
+	}
+	return fmt.Errorf("binary %q not found in zip", binaryName)
 }
 
 // extractBinaryFromTarball pulls the named binary out of a goreleaser
