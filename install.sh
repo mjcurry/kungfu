@@ -125,9 +125,17 @@ verify_checksum() {
         actual="$(sha256sum "$archive" | awk '{print $1}')"
     elif have shasum; then
         actual="$(shasum -a 256 "$archive" | awk '{print $1}')"
+    elif have openssl; then
+        # Fallback for stripped containers (busybox without sha256sum,
+        # base alpines, etc.). openssl ships on every modern distro.
+        actual="$(openssl dgst -sha256 "$archive" | awk '{print $NF}')"
     else
-        log "warning: neither sha256sum nor shasum available; skipping checksum verification."
-        return
+        err "no SHA-256 tool found (looked for sha256sum, shasum, openssl)."
+        err "the installer will not proceed without checksum verification."
+        err "install one of those tools, or download the binary manually from"
+        err "  https://github.com/${REPO}/releases"
+        err "and verify against the published kungfu_<version>_checksums.txt."
+        exit 1
     fi
     expected="$(awk -v want="$name" '$2 == want {print $1; exit}' "$checksums")"
     if [ -z "$expected" ]; then
