@@ -3,7 +3,6 @@ package rules
 import (
 	"fmt"
 	"path/filepath"
-	"regexp"
 
 	"github.com/mjcurry/kungfu/internal/skill"
 )
@@ -17,12 +16,10 @@ const maxDescriptionLen = 1024
 // for realistic kebab-case identifiers, small enough for every filesystem.
 const maxNameLen = 64
 
-// kebabCaseRE matches lowercase kebab-case names with an optional namespace
-// prefix separated by a colon (e.g. `ckm:banner-design`). Each segment is
-// ASCII letters and digits separated by single hyphens, no leading/trailing
-// or repeated hyphens. The namespace form is widely used by Claude slash
-// commands.
-var kebabCaseRE = regexp.MustCompile(`^([a-z0-9]+(-[a-z0-9]+)*:)?[a-z0-9]+(-[a-z0-9]+)*$`)
+// nameRE is the shared lowercase-kebab-case (optionally namespaced) regex
+// owned by the skill package. Aliased locally for terseness; do not
+// redefine here — see internal/skill/name.go for the source of truth.
+var nameRE = skill.NameRE
 
 // FrontmatterNameMissing flags a skill whose `name` field is absent or empty.
 type FrontmatterNameMissing struct{}
@@ -82,7 +79,7 @@ func (FrontmatterNameFormat) Check(s *skill.Skill) []Diagnostic {
 				len(s.Name), maxNameLen),
 		}}
 	}
-	if !kebabCaseRE.MatchString(s.Name) {
+	if !nameRE.MatchString(s.Name) {
 		return []Diagnostic{{
 			Path:     skillFile(s.Dir),
 			Severity: SeverityError,

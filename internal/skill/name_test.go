@@ -23,6 +23,14 @@ func TestValidateName(t *testing.T) {
 		{"double hyphen", "my--skill", false, "kebab-case"},
 		{"too long", strings.Repeat("a", MaxNameLen+1), false, "characters"},
 		{"at the limit", strings.Repeat("a", MaxNameLen), true, ""},
+		// Namespace-prefix form used by Claude slash commands.
+		{"namespaced", "ckm:banner-design", true, ""},
+		{"namespaced short", "a:b", true, ""},
+		{"empty namespace", ":banner", false, "kebab-case"},
+		{"empty name part", "ckm:", false, "kebab-case"},
+		{"double colon", "ckm::banner", false, "kebab-case"},
+		{"upper after colon", "ckm:Banner", false, "kebab-case"},
+		{"upper before colon", "CKM:banner", false, "kebab-case"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
