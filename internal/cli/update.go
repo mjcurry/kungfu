@@ -357,7 +357,8 @@ func executeUpdatePlan(cmd *cobra.Command, plan *updatePlan) error {
 			continue
 		}
 		dst := filepath.Join(r.upd.Location.Dir, s.Name)
-		if err := skill.Install(finalDir, dst, true); err != nil {
+		res, err := skill.Install(finalDir, dst, true)
+		if err != nil {
 			_ = os.RemoveAll(scratch)
 			failures = append(failures, fmt.Errorf("%s (%s, %s): %w",
 				r.upd.Skill.Name, r.upd.Location.Target.Name, r.upd.Location.Scope, err))
@@ -368,6 +369,11 @@ func executeUpdatePlan(cmd *cobra.Command, plan *updatePlan) error {
 			continue
 		}
 		_ = os.RemoveAll(scratch)
+		if res.BackupLeftover != "" {
+			fmt.Fprintf(errOut,
+				"%s could not remove backup at %s — remove it manually with `rm -rf %s`\n",
+				ui.Muted.Render("!"), res.BackupLeftover, res.BackupLeftover)
+		}
 		succeeded = append(succeeded, r)
 		fmt.Fprintf(out, "%s updated: %s → %s (%s) at %s (%s → %s)\n",
 			ui.Success.Render("✓"), s.Name,

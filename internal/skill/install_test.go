@@ -94,7 +94,7 @@ func TestInstallCopiesTree(t *testing.T) {
 	src := makeFixtureSkill(t, t.TempDir(), "demo", true)
 	dst := filepath.Join(t.TempDir(), "demo")
 
-	if err := Install(src, dst, false); err != nil {
+	if _, err := Install(src, dst, false); err != nil {
 		t.Fatalf("Install() error: %v", err)
 	}
 	if _, err := Load(dst); err != nil {
@@ -111,7 +111,7 @@ func TestInstallPreservesExecutableBit(t *testing.T) {
 	}
 	src := makeFixtureSkill(t, t.TempDir(), "exec", true)
 	dst := filepath.Join(t.TempDir(), "exec")
-	if err := Install(src, dst, false); err != nil {
+	if _, err := Install(src, dst, false); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(filepath.Join(dst, "scripts", "run.sh"))
@@ -134,7 +134,7 @@ func TestInstallRefusesExistingWithoutForce(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := Install(src, dst, false)
+	_, err := Install(src, dst, false)
 	if !errors.Is(err, ErrSkillExists) {
 		t.Fatalf("err = %v, want ErrSkillExists", err)
 	}
@@ -154,7 +154,7 @@ func TestInstallForceReplacesAndCleansBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Install(src, dst, true); err != nil {
+	if _, err := Install(src, dst, true); err != nil {
 		t.Fatalf("Install --force error: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dst, "old-marker")); err == nil {
@@ -180,7 +180,7 @@ func TestInstallRejectsNonDirectorySource(t *testing.T) {
 	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := Install(file, filepath.Join(root, "dst"), false); err == nil {
+	if _, err := Install(file, filepath.Join(root, "dst"), false); err == nil {
 		t.Fatal("expected error when source is a file")
 	}
 }
@@ -191,13 +191,79 @@ func TestInstallRejectsSourceWithoutSKILLmd(t *testing.T) {
 	if err := os.MkdirAll(src, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := Install(src, filepath.Join(root, "dst"), false); err == nil {
+	if _, err := Install(src, filepath.Join(root, "dst"), false); err == nil {
 		t.Fatal("expected error when source has no SKILL.md")
 	}
 }
 
+func TestInstallForceReportsBackupLeftoverWithoutFailing(t *testing.T) {
+	// When force-overwriting an existing skill and the backup cleanup
+	// fails (e.g. read-only parent), the install itself has already
+	// committed — surface the leftover path via Result and return nil
+	// rather than reporting the install as failed.
+	if runtime.GOOS == "windows" {
+		t.Skip("read-only directory semantics differ on Windows")
+	}
+	src := makeFixtureSkill(t, t.TempDir(), "leftover", false)
+	dstParent := t.TempDir()
+	dst := filepath.Join(dstParent, "leftover")
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Pre-populate the destination so backup-creation kicks in.
+	if err := os.WriteFile(filepath.Join(dst, "old-marker"), []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Make the parent read-only AFTER install renames things into place
+	// — we cannot prevent the create-backup rename, but we can break the
+	// cleanup RemoveAll. The simplest cross-platform way is to plant an
+	// undeletable file inside the backup once it appears. Easier: chmod
+	// the parent to 0o555 right before Install runs; the staging copy,
+	// the rename to backup, and the rename of staging→dst all fail under
+	// 0o555 because they create entries in the parent. We need a more
+	// surgical hook.
+	//
+	// Approach: use a fixture where the destination contains a
+	// subdirectory we make 0o500 so its inner files cannot be removed.
+	// RemoveAll then fails on the backup, but the new install is already
+	// in place because the rename committed first.
+	innerDir := filepath.Join(dst, "innards")
+	if err := os.MkdirAll(innerDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(innerDir, "stuck.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(innerDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	// After the test, walk dstParent and restore any 0o500 dirs to 0o755
+	// so t.TempDir's own RemoveAll cleanup can succeed. The innards
+	// directory will have been renamed inside a `.bak-<rand>` sibling.
+	t.Cleanup(func() {
+		_ = filepath.WalkDir(dstParent, func(path string, d fs.DirEntry, err error) error {
+			if err == nil && d.IsDir() {
+				_ = os.Chmod(path, 0o755)
+			}
+			return nil
+		})
+	})
+
+	res, err := Install(src, dst, true)
+	if err != nil {
+		t.Fatalf("Install --force returned error: %v", err)
+	}
+	if res.BackupLeftover == "" {
+		t.Errorf("expected BackupLeftover to be set when cleanup fails")
+	}
+	// The new copy must still be in place.
+	if _, err := Load(dst); err != nil {
+		t.Errorf("Load(installed) failed despite Install returning nil: %v", err)
+	}
+}
+
 func TestInstallSourceMissingErrors(t *testing.T) {
-	if err := Install(filepath.Join(t.TempDir(), "nope"), filepath.Join(t.TempDir(), "dst"), false); err == nil {
+	if _, err := Install(filepath.Join(t.TempDir(), "nope"), filepath.Join(t.TempDir(), "dst"), false); err == nil {
 		t.Fatal("expected error for missing source")
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		// fs.ErrNotExist wrapping is conventional but not required; just

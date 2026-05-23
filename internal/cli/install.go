@@ -434,7 +434,8 @@ func runInstallPlanMulti(
 	totalSucceeded := 0
 	failures := make([]error, 0)
 	for _, p := range plans {
-		if err := skill.Install(p.prepared.scratchDir, p.dst, force); err != nil {
+		res, err := skill.Install(p.prepared.scratchDir, p.dst, force)
+		if err != nil {
 			failures = append(failures, fmt.Errorf("%s → %s (%s): %w",
 				p.prepared.skill.Name, p.loc.Target.Name, p.loc.Scope, err))
 			fmt.Fprintf(cmd.ErrOrStderr(), "%s install failed for %s → %s (%s): %v\n",
@@ -447,6 +448,11 @@ func runInstallPlanMulti(
 		fmt.Fprintf(out, "%s installed: %s → %s (%s) at %s\n",
 			ui.Success.Render("✓"), p.prepared.skill.Name,
 			ui.Bold.Render(p.loc.Target.Name), p.loc.Scope, p.dst)
+		if res.BackupLeftover != "" {
+			fmt.Fprintf(cmd.ErrOrStderr(),
+				"%s could not remove backup at %s — remove it manually with `rm -rf %s`\n",
+				ui.Muted.Render("!"), res.BackupLeftover, res.BackupLeftover)
+		}
 	}
 
 	var summary string
@@ -543,7 +549,8 @@ func runInstallPlan(cmd *cobra.Command, s *skill.Skill, srcDir string, force, dr
 	succeeded := make([]installPlan, 0, len(plans))
 	failures := make([]error, 0)
 	for _, p := range plans {
-		if err := skill.Install(srcDir, p.dst, force); err != nil {
+		res, err := skill.Install(srcDir, p.dst, force)
+		if err != nil {
 			failures = append(failures, fmt.Errorf("%s (%s): %w", p.loc.Target.Name, p.loc.Scope, err))
 			fmt.Fprintf(cmd.ErrOrStderr(), "%s install failed for %s (%s): %v\n",
 				ui.Error.Render("✗"), p.loc.Target.Name, p.loc.Scope, err)
@@ -553,6 +560,11 @@ func runInstallPlan(cmd *cobra.Command, s *skill.Skill, srcDir string, force, dr
 		fmt.Fprintf(out, "%s installed: %s → %s (%s) at %s\n",
 			ui.Success.Render("✓"), s.Name,
 			ui.Bold.Render(p.loc.Target.Name), p.loc.Scope, p.dst)
+		if res.BackupLeftover != "" {
+			fmt.Fprintf(cmd.ErrOrStderr(),
+				"%s could not remove backup at %s — remove it manually with `rm -rf %s`\n",
+				ui.Muted.Render("!"), res.BackupLeftover, res.BackupLeftover)
+		}
 	}
 
 	summary := fmt.Sprintf("installed to %d target%s", len(succeeded), plural(len(succeeded)))
