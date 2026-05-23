@@ -257,10 +257,17 @@ type cappedReader struct {
 
 func (r *cappedReader) Read(p []byte) (int, error) {
 	if r.n >= r.Max {
-		r.exceeded = true
+		// Cap already consumed. Signal EOF without flagging an overflow:
+		// "we filled the cap" and "we observed bytes past the cap" are
+		// different conditions, and a stream that is exactly Max bytes
+		// must not be treated as exceeded. r.exceeded is set below only
+		// when the +1 probe actually returns bytes beyond Max.
 		return 0, io.EOF
 	}
 	remain := r.Max - r.n
+	// Read one byte beyond the cap so we can detect overflow without
+	// buffering. If the underlying reader returns more than `remain`
+	// bytes, the stream is genuinely too large.
 	if int64(len(p)) > remain+1 {
 		p = p[:remain+1]
 	}

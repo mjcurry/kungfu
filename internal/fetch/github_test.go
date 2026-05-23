@@ -1,7 +1,9 @@
 package fetch
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -157,6 +159,63 @@ func TestFetchTarball_UnknownSHAErrors(t *testing.T) {
 		"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 	if err == nil {
 		t.Fatal("expected error for unknown SHA")
+	}
+}
+
+func TestCappedReader_ExactlyAtCap(t *testing.T) {
+	// A stream that is exactly Max bytes must read cleanly and must not
+	// set the exceeded flag. Regression for the off-by-one where the
+	// "we filled the cap" branch incorrectly flagged exceeded=true on the
+	// EOF-discovery call.
+	const max = 1024
+	src := bytes.Repeat([]byte("x"), max)
+	r := &cappedReader{R: bytes.NewReader(src), Max: int64(max)}
+
+	got, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(got) != max {
+		t.Errorf("read %d bytes, want %d", len(got), max)
+	}
+	if r.exceeded {
+		t.Errorf("stream of exactly Max bytes flagged as exceeded")
+	}
+}
+
+func TestCappedReader_OneOverCap(t *testing.T) {
+	// A stream of Max+1 bytes must flag exceeded and truncate at Max.
+	const max = 1024
+	src := bytes.Repeat([]byte("x"), max+1)
+	r := &cappedReader{R: bytes.NewReader(src), Max: int64(max)}
+
+	got, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(got) != max {
+		t.Errorf("read %d bytes, want truncated to %d", len(got), max)
+	}
+	if !r.exceeded {
+		t.Errorf("stream of Max+1 bytes did not flag exceeded")
+	}
+}
+
+func TestCappedReader_UnderCap(t *testing.T) {
+	// A stream smaller than Max must read cleanly with no exceeded flag.
+	const max = 1024
+	src := bytes.Repeat([]byte("x"), max-1)
+	r := &cappedReader{R: bytes.NewReader(src), Max: int64(max)}
+
+	got, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(got) != max-1 {
+		t.Errorf("read %d bytes, want %d", len(got), max-1)
+	}
+	if r.exceeded {
+		t.Errorf("stream under Max flagged as exceeded")
 	}
 }
 
