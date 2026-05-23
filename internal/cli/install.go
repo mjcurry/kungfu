@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -135,7 +136,7 @@ func runRemoteInstall(cmd *cobra.Command, src *fetch.Source, force, dryRun, noLi
 	}
 	ctx := cmd.Context()
 	if ctx == nil {
-		ctx = cmd.Context()
+		ctx = context.Background()
 	}
 
 	sha, _, err := client.ResolveRef(ctx, src)
