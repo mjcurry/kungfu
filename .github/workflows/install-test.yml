@@ -1,13 +1,14 @@
 name: install-test
 
-# Triggers on PRs that touch the installer or this workflow. Builds a
-# goreleaser snapshot, serves it from a local HTTP server, then drives
-# install.sh against it on Ubuntu, Alpine, and macOS to make sure the
-# script's POSIX-shell paths work on all three.
+# Triggers on PRs that touch either installer or this workflow. Builds a
+# goreleaser snapshot, serves it from a local HTTP server, then drives:
+#   - install.sh on Ubuntu, Alpine, and macOS (POSIX shell path)
+#   - install.ps1 on windows-latest (PowerShell path)
 on:
   pull_request:
     paths:
       - install.sh
+      - install.ps1
       - .github/workflows/install-test.yml
       - .goreleaser.yaml
   workflow_dispatch: {}
@@ -107,3 +108,62 @@ jobs:
           if [ -f /tmp/server.pid ]; then
             kill "$(cat /tmp/server.pid)" 2>/dev/null || true
           fi
+
+  # Drive install.ps1 against the same snapshot on a real Windows runner.
+  # Mirrors the POSIX job: serve the dist directory over HTTP, point the
+  # installer at it via KUNGFU_INSTALL_BASE_URL, install to a tempdir, then
+  # run `kungfu version` to confirm the binary works.
+  install-windows:
+    needs: snapshot
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download snapshot dist
+        uses: actions/download-artifact@v4
+        with:
+          name: snapshot-dist
+          path: dist/
+
+      - name: Serve dist on localhost
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath python `
+            -ArgumentList '-m','http.server','8080' `
+            -WorkingDirectory dist -PassThru -WindowStyle Hidden
+          Set-Content -Path "$env:RUNNER_TEMP\server.pid" -Value $proc.Id
+          Start-Sleep -Seconds 2
+          # Sanity probe — the script will fail later anyway, but a clear
+          # message here helps if the server failed to start.
+          $probe = Invoke-WebRequest -UseBasicParsing -Uri http://localhost:8080/ -TimeoutSec 5
+          Write-Host "server up: HTTP $($probe.StatusCode)"
+
+      - name: Run installer
+        shell: pwsh
+        env:
+          KUNGFU_VERSION: ${{ needs.snapshot.outputs.version }}
+          KUNGFU_INSTALL_BASE_URL: http://localhost:8080
+          KUNGFU_INSTALL_DEBUG: "1"
+        run: |
+          $installDir = Join-Path $env:RUNNER_TEMP "kungfu-install-target"
+          $env:KUNGFU_INSTALL_DIR = $installDir
+          .\install.ps1
+          $kungfu = Join-Path $installDir 'kungfu.exe'
+          if (-not (Test-Path -LiteralPath $kungfu)) {
+            throw "installer did not produce $kungfu"
+          }
+          & $kungfu version
+          if ($LASTEXITCODE -ne 0) {
+            throw "kungfu version exited $LASTEXITCODE"
+          }
+
+      - name: Stop server
+        if: always()
+        shell: pwsh
+        run: |
+          $pidFile = Join-Path $env:RUNNER_TEMP 'server.pid'
+          if (Test-Path -LiteralPath $pidFile) {
+            $procId = Get-Content -LiteralPath $pidFile
+            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+          }
