@@ -47,6 +47,18 @@ The script detects your OS / arch, downloads the matching archive from the
 its sha256 checksum, and drops the binary into `/usr/local/bin` (or
 `$HOME/.local/bin` if `/usr/local/bin` is read-only).
 
+### PowerShell (Windows)
+
+```powershell
+irm https://raw.githubusercontent.com/mjcurry/kungfu/main/install.ps1 | iex
+```
+
+Picks the right `kungfu_<version>_windows_<arch>.zip` for your machine,
+verifies sha256, installs `kungfu.exe` into `%LOCALAPPDATA%\Programs\kungfu`,
+and adds that directory to your user `PATH`. No admin required. Override the
+destination with `$env:KUNGFU_INSTALL_DIR` before running, or pin a specific
+release with `$env:KUNGFU_VERSION`.
+
 ### go install
 
 ```sh
