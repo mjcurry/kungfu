@@ -251,6 +251,39 @@ failure.
 
 ---
 
+## `kungfu target`
+
+Inspect and define skill-installation targets.
+
+```
+kungfu target list
+kungfu target add <name> [--personal-dir <path>] [--project-dir <path>]
+```
+
+`list` prints every configured target with its personal/project
+directories, whether it is builtin or custom, and a `*` marker on the
+current `default_targets`.
+
+`add` appends a `[targets.<name>]` section to your config file so any
+agent that reads `SKILL.md` directories can be targeted by name — no
+hand-editing TOML. At least one of `--personal-dir` / `--project-dir` is
+required; `--personal-dir` may start with `~/`, `--project-dir` must be
+relative to a project root. The section is appended textually so existing
+comments and formatting are preserved, and the resulting file is
+parse-validated before anything is written.
+
+```sh
+kungfu target add aider --personal-dir ~/.aider/skills --project-dir .aider/skills
+kungfu install user/repo --target aider
+```
+
+Builtin names cannot be re-added (edit their `[targets.<name>]` section
+directly to override directories); `all` is reserved.
+
+Exit codes: 0 success, 1 invalid input or name collision, 3 I/O failure.
+
+---
+
 ## `kungfu update`
 
 Re-fetch a previously-installed skill using its provenance frontmatter and

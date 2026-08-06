@@ -199,6 +199,7 @@ The format every agent reads is described in [docs/skill-format.md](docs/skill-f
 | `kungfu show`      | Print a skill's metadata + body (markdown-rendered).               |
 | `kungfu remove`    | Remove a skill from one or more targets.                           |
 | `kungfu update`    | Re-fetch a previously-installed skill using its stored provenance. |
+| `kungfu target`    | List configured targets or define a custom one (`target add`).     |
 | `kungfu self-update` | Replace the kungfu binary with the latest release.               |
 | `kungfu version`   | Print build info (also `--json`).                                  |
 
