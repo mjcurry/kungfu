@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/mjcurry/kungfu/internal/target"
 )
 
 // multiTargetEnv represents a per-test sandbox: a config file plus dedicated
@@ -21,15 +23,34 @@ type multiTargetEnv struct {
 	dirs       map[string]string // target name -> personal dir
 }
 
-// setupMultiTargetEnv writes a config file pointing each builtin target's
-// personal_dir at a temp directory and returns the env handle. Every target
-// — including cursor — is configured with a real personal scope so tests
-// install into the tempdir tree rather than the runner's real home.
+// setHomeForTest sets the env var that os.UserHomeDir consults on the
+// current platform: HOME on Linux/macOS, USERPROFILE on Windows.
+func setHomeForTest(t *testing.T, home string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", home)
+		return
+	}
+	t.Setenv("HOME", home)
+}
+
+// setupMultiTargetEnv writes a config file pointing every builtin target's
+// personal_dir at a temp directory and returns the env handle. Targets are
+// enumerated from target.Builtins() — never a hardcoded list — so a newly
+// added builtin cannot silently fall through to its real tilde-expanded
+// path. As a second layer of defense HOME/USERPROFILE is also pointed at a
+// tempdir, so even a misconfigured target expands "~" into the sandbox
+// rather than the real home.
 func setupMultiTargetEnv(t *testing.T) *multiTargetEnv {
 	t.Helper()
 	root := t.TempDir()
+	setHomeForTest(t, t.TempDir())
 	env := &multiTargetEnv{dirs: map[string]string{}}
-	for _, name := range []string{"claude", "codex", "cursor", "copilot"} {
+	names := make([]string, 0, len(target.Builtins()))
+	for _, b := range target.Builtins() {
+		names = append(names, b.Name)
+	}
+	for _, name := range names {
 		env.dirs[name] = filepath.Join(root, name)
 		if err := os.MkdirAll(env.dirs[name], 0o755); err != nil {
 			t.Fatal(err)
@@ -38,7 +59,7 @@ func setupMultiTargetEnv(t *testing.T) *multiTargetEnv {
 	// Use TOML literal strings (single-quoted) for paths so backslashes
 	// in Windows tempdir paths are not interpreted as escape sequences.
 	cfg := "default_targets = [\"claude\"]\ndefault_scope = \"personal\"\n\n"
-	for _, name := range []string{"claude", "codex", "cursor", "copilot"} {
+	for _, name := range names {
 		cfg += "[targets." + name + "]\n"
 		cfg += "personal_dir = '" + env.dirs[name] + "'\n\n"
 	}

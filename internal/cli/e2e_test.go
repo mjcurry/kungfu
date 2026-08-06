@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/mjcurry/kungfu/internal/target"
 )
 
 // projectRoot climbs from the current working directory until it finds a
@@ -75,14 +77,16 @@ func TestE2E_MultiTargetLifecycle(t *testing.T) {
 
 	bin := buildBinary(t)
 	root := t.TempDir()
-	dirs := map[string]string{
-		"claude":  filepath.Join(root, "claude"),
-		"codex":   filepath.Join(root, "codex"),
-		"cursor":  filepath.Join(root, "cursor"),
-		"copilot": filepath.Join(root, "copilot"),
+	// Enumerate target.Builtins() rather than hardcoding names so a newly
+	// added builtin can never fall through to its real home-dir path.
+	names := make([]string, 0, len(target.Builtins()))
+	for _, b := range target.Builtins() {
+		names = append(names, b.Name)
 	}
-	for _, d := range dirs {
-		if err := os.MkdirAll(d, 0o755); err != nil {
+	dirs := map[string]string{}
+	for _, name := range names {
+		dirs[name] = filepath.Join(root, name)
+		if err := os.MkdirAll(dirs[name], 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -90,7 +94,7 @@ func TestE2E_MultiTargetLifecycle(t *testing.T) {
 	// TOML literal strings (single quotes) for paths: avoids backslash
 	// escape interpretation on Windows where tempdirs are C:\Users\...
 	cfg := "default_targets = [\"claude\"]\ndefault_scope = \"personal\"\n\n"
-	for _, name := range []string{"claude", "codex", "cursor", "copilot"} {
+	for _, name := range names {
 		cfg += "[targets." + name + "]\npersonal_dir = '" + dirs[name] + "'\n\n"
 	}
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
@@ -99,8 +103,15 @@ func TestE2E_MultiTargetLifecycle(t *testing.T) {
 
 	src := writeFixtureSkill(t, t.TempDir(), "demo", "Use this skill when demoing the lifecycle.", true)
 
+	// Sandbox the home directory too: even a target the config missed
+	// must expand "~" inside the tempdir, never the real home.
+	homeVar := "HOME"
+	if runtime.GOOS == "windows" {
+		homeVar = "USERPROFILE"
+	}
 	env := []string{
 		"XDG_CONFIG_HOME=" + filepath.Join(root, "xdg"),
+		homeVar + "=" + t.TempDir(),
 		"NO_COLOR=1",
 	}
 	common := []string{"--config", cfgPath, "--no-color"}

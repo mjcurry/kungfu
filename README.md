@@ -169,12 +169,22 @@ this automatically:
 
 ## Supported agents
 
-| Agent     | Personal scope        | Project scope        | Status |
-| --------- | --------------------- | -------------------- | ------ |
-| Claude    | `~/.claude/skills`    | `.claude/skills`     | ✅      |
-| Codex     | `~/.codex/skills`     | `.codex/skills`      | ✅      |
-| Cursor    | `~/.cursor/skills`    | `.cursor/skills`     | ✅      |
-| Copilot   | `~/.copilot/skills`   | `.github/skills`     | ✅      |
+| Agent        | Personal scope               | Project scope     | Status |
+| ------------ | ---------------------------- | ----------------- | ------ |
+| Claude       | `~/.claude/skills`           | `.claude/skills`  | ✅      |
+| Codex        | `~/.codex/skills`            | `.codex/skills`   | ✅      |
+| Cursor       | `~/.cursor/skills`           | `.cursor/skills`  | ✅      |
+| Copilot      | `~/.copilot/skills`          | `.github/skills`  | ✅      |
+| Devin Desktop | `~/.codeium/windsurf/skills` | `.windsurf/skills` | ✅      |
+| Antigravity  | `~/.gemini/config/skills`    | `.agents/skills`  | ✅      |
+
+Devin Desktop (formerly Windsurf) also reads the cross-agent
+`.agents/skills` convention, so a project-scope install for `antigravity`
+is picked up by Devin too.
+
+Need an agent that isn't listed? Any tool that reads `SKILL.md`
+directories can be added as a custom target in your config — see
+[docs/commands.md](docs/commands.md).
 
 The format every agent reads is described in [docs/skill-format.md](docs/skill-format.md).
 

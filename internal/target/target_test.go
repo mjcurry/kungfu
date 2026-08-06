@@ -9,7 +9,7 @@ import (
 
 func TestBuiltins(t *testing.T) {
 	got := Builtins()
-	wantNames := []string{"claude", "codex", "cursor", "copilot"}
+	wantNames := []string{"claude", "codex", "cursor", "copilot", "devin", "antigravity"}
 	if len(got) != len(wantNames) {
 		t.Fatalf("Builtins() = %d targets, want %d", len(got), len(wantNames))
 	}
@@ -60,7 +60,7 @@ func TestResolve(t *testing.T) {
 		{"single", "claude", []string{"claude"}, ""},
 		{"multi", "claude,codex", []string{"claude", "codex"}, ""},
 		{"spaces", " claude , codex ", []string{"claude", "codex"}, ""},
-		{"all", "all", []string{"claude", "codex", "cursor", "copilot"}, ""},
+		{"all", "all", []string{"claude", "codex", "cursor", "copilot", "devin", "antigravity"}, ""},
 		{"declaration order independent of input order",
 			"copilot,claude", []string{"claude", "copilot"}, ""},
 		{"empty", "", nil, "no target specified"},

@@ -78,6 +78,13 @@ func Builtins() []Target {
 		{Name: "codex", PersonalDir: "~/.codex/skills", ProjectDir: ".codex/skills"},
 		{Name: "cursor", PersonalDir: "~/.cursor/skills", ProjectDir: ".cursor/skills"},
 		{Name: "copilot", PersonalDir: "~/.copilot/skills", ProjectDir: ".github/skills"},
+		// Devin Desktop (formerly Windsurf). Native paths per
+		// docs.devin.ai; it also reads the cross-agent .agents/skills.
+		{Name: "devin", PersonalDir: "~/.codeium/windsurf/skills", ProjectDir: ".windsurf/skills"},
+		// Google Antigravity. Project scope is the cross-agent
+		// .agents/skills convention (its documented default); personal
+		// scope per antigravity.google/docs/skills.
+		{Name: "antigravity", PersonalDir: "~/.gemini/config/skills", ProjectDir: ".agents/skills"},
 	}
 }
 

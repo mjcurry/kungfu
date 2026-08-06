@@ -179,7 +179,7 @@ func TestLoadMissingTargetsSectionUsesBuiltins(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wantNames := []string{"claude", "codex", "cursor", "copilot"}
+	wantNames := []string{"claude", "codex", "cursor", "copilot", "devin", "antigravity"}
 	if len(cfg.Targets) != len(wantNames) {
 		t.Fatalf("got %d targets, want %d", len(cfg.Targets), len(wantNames))
 	}
@@ -254,8 +254,9 @@ project_dir  = ".aider/skills"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Targets) != 5 {
-		t.Fatalf("got %d targets, want 4 builtins + 1 custom", len(cfg.Targets))
+	if len(cfg.Targets) != len(target.Builtins())+1 {
+		t.Fatalf("got %d targets, want %d builtins + 1 custom",
+			len(cfg.Targets), len(target.Builtins()))
 	}
 	aider, err := target.ByName("aider", cfg.Targets)
 	if err != nil {
@@ -311,8 +312,8 @@ func TestResolveTargets(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(got) != 4 {
-			t.Errorf("len = %d, want 4", len(got))
+		if len(got) != len(target.Builtins()) {
+			t.Errorf("len = %d, want %d", len(got), len(target.Builtins()))
 		}
 	})
 
