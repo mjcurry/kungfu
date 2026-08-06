@@ -38,7 +38,10 @@ type InstallResult struct {
 // and the leftover path is surfaced via Result.BackupLeftover.
 //
 // File modes are preserved (executable scripts stay executable). Symlinks
-// are recreated as symlinks pointing at the same target.
+// are skipped, matching remote-install extraction: a skill directory could
+// otherwise plant a link that reaches outside the install destination
+// (e.g. references/data -> ~/.aws) which an agent would happily follow at
+// read time. Skills that need linked content should vendor the files.
 func Install(src, dst string, force bool) (InstallResult, error) {
 	var res InstallResult
 	srcInfo, err := os.Stat(src)
@@ -132,11 +135,8 @@ func copyTree(src, dst string) error {
 		case d.IsDir():
 			return os.MkdirAll(target, info.Mode().Perm())
 		case info.Mode()&os.ModeSymlink != 0:
-			link, err := os.Readlink(path)
-			if err != nil {
-				return err
-			}
-			return os.Symlink(link, target)
+			// Skipped deliberately — see the Install docstring.
+			return nil
 		default:
 			return copyRegularFile(path, target, info.Mode().Perm())
 		}

@@ -174,6 +174,46 @@ func TestInstallForceReplacesAndCleansBackup(t *testing.T) {
 	}
 }
 
+func TestInstallSkipsSymlinks(t *testing.T) {
+	// A local skill can contain symlinks pointing anywhere on the machine
+	// (e.g. references/data -> ~/.aws). Install must not recreate them in
+	// the destination: an agent reading the installed skill would follow
+	// the link. Remote installs already strip symlinks at extract time;
+	// local installs match that.
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation requires elevation on Windows")
+	}
+	srcParent := t.TempDir()
+	src := makeFixtureSkill(t, srcParent, "linky", false)
+
+	outside := filepath.Join(srcParent, "outside-secret.txt")
+	if err := os.WriteFile(outside, []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(src, "escape.txt")); err != nil {
+		t.Fatal(err)
+	}
+	// A directory symlink must be skipped entirely, not walked into.
+	if err := os.Symlink(srcParent, filepath.Join(src, "escape-dir")); err != nil {
+		t.Fatal(err)
+	}
+
+	dst := filepath.Join(t.TempDir(), "linky")
+	if _, err := Install(src, dst, false); err != nil {
+		t.Fatalf("Install() error: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(dst, "escape.txt")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("file symlink was copied into the destination")
+	}
+	if _, err := os.Lstat(filepath.Join(dst, "escape-dir")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("directory symlink was copied into the destination")
+	}
+	// The regular skill content must still be present.
+	if _, err := Load(dst); err != nil {
+		t.Errorf("Load(installed) error: %v", err)
+	}
+}
+
 func TestInstallRejectsNonDirectorySource(t *testing.T) {
 	root := t.TempDir()
 	file := filepath.Join(root, "not-a-dir")
