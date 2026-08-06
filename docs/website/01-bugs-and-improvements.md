@@ -356,7 +356,7 @@ not v1 features. Phrasing them as "today" overstates the product.
 | Gap | Where in the product today |
 | --- | --- |
 | **Only GitHub is supported.** Source parser rejects every other host; the README's roadmap entry for GitLab/Bitbucket/Codeberg has zero implementation. | `internal/fetch/source.go:88-97` |
-| **No `kungfu search` / no public index.** README roadmap names it but nothing exists; the website should not show search UI mockups as if they work. | README roadmap; no `search.go` |
+| **`kungfu search` is GitHub-backed, not a curated index.** The command exists and searches GitHub by topic/term, but there is no kungfu-owned skill directory, no quality curation, and no verified-author signal. The website can show search working but should not imply a curated registry. | `internal/cli/search.go`; no index service |
 | **No `kungfu publish`.** Same as above; this is roadmap-only. | README roadmap |
 | **No `kungfu test`.** Skill `scripts/test.sh` conventions exist only in templates; there is no runner. | README roadmap |
 | **No `kungfu doctor`.** Common-misconfig diagnoser is roadmap-only. | README roadmap |
