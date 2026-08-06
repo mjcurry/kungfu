@@ -95,13 +95,16 @@ kungfu install ./csv-formatter --target claude,codex,cursor,copilot
 kungfu install https://github.com/nextlevelbuilder/ui-ux-pro-max-skill \
     --target claude,codex,cursor,copilot
 
-# 4. See what's installed where:
+# 4. Discover more skills on GitHub:
+kungfu search pdf
+
+# 5. See what's installed where:
 kungfu list
 
-# 5. Read a skill the way an agent would:
+# 6. Read a skill the way an agent would:
 kungfu show ui-ux-pro-max-skill
 
-# 6. Bring everything tracking a moving ref up to date:
+# 7. Bring everything tracking a moving ref up to date:
 kungfu update --all
 ```
 
@@ -195,6 +198,7 @@ The format every agent reads is described in [docs/skill-format.md](docs/skill-f
 | `kungfu new`       | Scaffold a new skill from a built-in template (lint-clean).        |
 | `kungfu lint`      | Validate a skill against the rule set (stable, grep-able IDs).     |
 | `kungfu install`   | Install from a local path or a GitHub source.                      |
+| `kungfu search`    | Search GitHub for skill repositories, most-starred first.          |
 | `kungfu list`      | List installed skills across configured targets.                   |
 | `kungfu show`      | Print a skill's metadata + body (markdown-rendered).               |
 | `kungfu remove`    | Remove a skill from one or more targets.                           |
@@ -231,7 +235,8 @@ Beyond v1:
 - **More hosts.** GitLab, Bitbucket, Codeberg, and self-hosted Git via an
   http URL grammar.
 - **`kungfu publish`** that pushes a skill to a tap-style index.
-- **`kungfu search`** against a public skill directory.
+- **Curated skill index** for `kungfu search` (today it searches GitHub
+  directly by topic).
 - **`kungfu test`** that runs a skill's bundled `scripts/test.sh` (or
   language-detected runner) so reviewers don't have to.
 - **`kungfu doctor`** that diagnoses common misconfigurations (missing

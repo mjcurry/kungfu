@@ -7,6 +7,7 @@ package githubfake
 import (
 	"archive/tar"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +31,16 @@ type Repo struct {
 	Files map[string]string
 }
 
+// SearchItem is one entry served from the fake's repository-search
+// endpoint, mirroring the GitHub payload fields kungfu consumes.
+type SearchItem struct {
+	FullName    string `json:"full_name"`
+	Description string `json:"description"`
+	Stars       int    `json:"stargazers_count"`
+	URL         string `json:"html_url"`
+	Archived    bool   `json:"archived"`
+}
+
 // Server is an httptest.Server backed by an in-memory repository set. The
 // API root is APIBase(), the archive root is ArchiveBase(); both point at
 // the same underlying listener but use different path prefixes so the
@@ -38,6 +49,12 @@ type Server struct {
 	HTTP  *httptest.Server
 	repos map[string]Repo
 	mu    sync.Mutex
+
+	// searchItems is returned (verbatim) from GET /api/search/repositories.
+	searchItems []SearchItem
+	// LastSearchQuery records the q parameter of the most recent search
+	// request so tests can assert on the query kungfu built.
+	LastSearchQuery string
 }
 
 // NewServer starts a Server with no repos registered.
@@ -63,10 +80,19 @@ func (s *Server) AddRepo(owner, name string, repo Repo) {
 	s.repos[owner+"/"+name] = repo
 }
 
+// SetSearchResults sets the items the search endpoint returns.
+func (s *Server) SetSearchResults(items []SearchItem) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.searchItems = items
+}
+
 // handle is the shared HTTP handler. The path prefix selects whether to
 // serve API or archive responses.
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	switch {
+	case r.URL.Path == "/api/search/repositories":
+		s.serveSearch(w, r)
 	case strings.HasPrefix(r.URL.Path, "/api/repos/"):
 		s.serveAPI(w, r, strings.TrimPrefix(r.URL.Path, "/api/repos/"))
 	case strings.HasPrefix(r.URL.Path, "/archive/"):
@@ -74,6 +100,20 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (s *Server) serveSearch(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.LastSearchQuery = r.URL.Query().Get("q")
+	items := make([]SearchItem, len(s.searchItems))
+	copy(items, s.searchItems)
+	s.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"total_count": len(items),
+		"items":       items,
+	})
 }
 
 func (s *Server) serveAPI(w http.ResponseWriter, r *http.Request, rest string) {

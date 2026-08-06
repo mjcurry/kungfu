@@ -189,6 +189,37 @@ kungfu install user/repo/skills/csv --target claude --dry-run
 
 ---
 
+## `kungfu search`
+
+Search GitHub for skill repositories, most-starred first.
+
+```
+kungfu search <term> [--limit <n>] [--topic <topic>] [--all-repos] [--json]
+```
+
+| Flag          | Default        | Notes                                                       |
+| ------------- | -------------- | ----------------------------------------------------------- |
+| `--limit`     | 15             | Maximum results (1–100).                                    |
+| `--topic`     | `agent-skills` | GitHub topic the search is scoped to.                       |
+| `--all-repos` | false          | Drop the topic filter and search every matching repository. |
+| `--json`      | false          | Emit `[{name, description, stars, url, archived}]`.         |
+
+The search runs against the GitHub repository-search API; anonymous
+requests share GitHub's unauthenticated rate limit, so set
+`GITHUB_TOKEN` if you hit 403s. Zero hits exits 0 (with a tip to retry
+with `--all-repos`).
+
+```sh
+kungfu search csv
+kungfu search design --limit 5
+kungfu search pdf --all-repos --json | jq '.[0].name'
+```
+
+Exit codes: 0 success (including no results), 1 invalid input, 5 network
+or GitHub API failure.
+
+---
+
 ## `kungfu list`
 
 List installed skills across configured targets.
